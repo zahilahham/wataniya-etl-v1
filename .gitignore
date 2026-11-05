@@ -1,0 +1,11 @@
+.env
+logs/
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+
+# NiFi exports contain internal database hosts and usernames.
+NiFi_Flow.json
+PG_STG_*.json
