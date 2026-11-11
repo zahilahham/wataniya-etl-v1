@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wataniya ETL demo</title>
+  <style>
+    :root {
+      --ink: #1b3a4b;
+      --muted: #3d4f58;
+      --line: #d5dee3;
+      --paper: #f6f8f9;
+      --card: #ffffff;
+      --blue: #dae8fc;
+      --blue-line: #6c8ebf;
+      --green: #d5e8d4;
+      --green-line: #82b366;
+      --yellow: #fff2cc;
+      --yellow-line: #d6b656;
+      --red: #f8cecc;
+      --red-line: #b85450;
+      --gray: #f3f4f5;
+      --purple: #e1d5e7;
+      --purple-line: #9673a6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Calibri, sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+      line-height: 1.4;
+    }
+    header {
+      background: var(--ink);
+      color: white;
+      padding: 28px 40px 22px;
+    }
+    header h1 { margin: 0 0 8px; font-size: 32px; font-weight: 650; }
+    header p { margin: 0; max-width: 980px; font-size: 18px; color: #d5e4ec; }
+    nav {
+      display: flex;
+      gap: 18px;
+      padding: 12px 40px;
+      background: white;
+      border-bottom: 1px solid var(--line);
+      position: sticky;
+      top: 0;
+    }
+    nav a { color: var(--ink); font-weight: 650; text-decoration: none; }
+    main { padding: 28px 40px 64px; max-width: 1280px; }
+    h2 { font-size: 26px; margin: 8px 0 8px; }
+    .lead { font-size: 18px; color: var(--muted); margin: 0 0 22px; max-width: 920px; }
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .lane {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .lane h3 {
+      margin: 0;
+      padding: 14px 18px;
+      font-size: 18px;
+    }
+    .lane.nifi h3 { background: #f7f1fa; color: #5b3a6e; }
+    .lane.python h3 { background: #f4f8fb; color: var(--ink); }
+    ol.flow { list-style: none; margin: 0; padding: 16px 16px 20px; }
+    ol.flow li {
+      position: relative;
+      margin: 0 0 12px;
+      padding: 12px 14px 12px 52px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      min-height: 72px;
+    }
+    ol.flow li::before {
+      content: attr(data-n);
+      position: absolute;
+      left: 12px;
+      top: 14px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--ink);
+      color: white;
+      font-size: 14px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    li strong { display: block; margin-bottom: 2px; }
+    .src { background: var(--yellow); border-color: var(--yellow-line); }
+    .nifi-step { background: var(--purple); border-color: var(--purple-line); }
+    .api { background: var(--blue); border-color: var(--blue-line); }
+    .db { background: var(--green); border-color: var(--green-line); }
+    .log { background: var(--gray); }
+    .stop { background: var(--red); border-color: var(--red-line); }
+    .compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 18px; }
+    .compare article {
+      background: white;
+      border-radius: 10px;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+    }
+    .compare h3 { margin: 0 0 6px; font-size: 16px; }
+    .compare p { margin: 0; }
+    section.detail { margin-top: 42px; }
+    .script {
+      margin-top: 28px;
+      background: var(--ink);
+      color: white;
+      border-radius: 12px;
+      padding: 18px 22px;
+    }
+    .script h2 { color: white; margin-top: 0; }
+    .script ol { margin: 0; padding-left: 22px; font-size: 17px; }
+    .script li { margin: 8px 0; }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+      background: rgba(27, 58, 75, 0.08);
+      padding: 0 4px;
+      border-radius: 4px;
+    }
+    .script code { background: rgba(255,255,255,0.12); }
+    .table-groups { display: grid; grid-template-columns: 1.4fr 0.8fr; gap: 18px; }
+    .table-groups article, .wide {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px 16px;
+    }
+    .table-groups h3, .wide h3 { margin: 0 0 8px; font-size: 16px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 8px;
+      background: white;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+    .chip small {
+      display: block;
+      margin-top: 2px;
+      font-family: "Segoe UI", Calibri, sans-serif;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chip.live { background: var(--green); border-color: var(--green-line); }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+    .legend span {
+      border-radius: 999px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      font-size: 13px;
+    }
+    @media (max-width: 900px) {
+      .cols, .compare, .table-groups, .pair { grid-template-columns: 1fr; }
+      header, nav, main { padding-left: 18px; padding-right: 18px; }
+    }
+    @media print {
+      nav { display: none; }
+      body { background: white; }
+      .lane, .script { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Wataniya ETL demo</h1>
+    <p>NiFi already moves Kastle and Avaya into SQL Server and builds the warehouse. This demo runs one of those rules in Python: copy EMPLOYEE as-is into PostgreSQL, then let SQL build the staging table and the employee dimension, with a run log you can open.</p>
+  </header>
+  <nav>
+    <a href="#difference">The difference</a>
+    <a href="#extract">Extract, step by step</a>
+    <a href="#transform">Transform, step by step</a>
+    <a href="#tables">Tables</a>
+    <a href="#script">What to click</a>
+  </nav>
+  <main>
+    <section id="difference">
+      <h2>The difference</h2>
+      <p class="lead">The employee rule is the same. The path around it is not. NiFi chains processors with flowfiles. The new job is two API calls, a raw copy, and SQL files in order.</p>
+      <div class="cols">
+        <article class="lane nifi">
+          <h3>NiFi today — the full estate</h3>
+          <ol class="flow">
+            <li class="src" data-n="1"><strong>Two sources</strong>Oracle Kastle, many tables in PULSE_NFC_PROD. Avaya KPIVision, four call and agent views.</li>
+            <li class="nifi-step" data-n="2"><strong>A view supplies the window</strong>DATE_PARAM_VW holds the start and end. Kastle starts at 12:30. Avaya repeats every 15 minutes from the latest fact timestamp.</li>
+            <li class="nifi-step" data-n="3"><strong>Each table is its own group</strong>Truncate SQL Server STG, read the source, stamp PG_NAME, LD_STRT_DT, and EXE_ID, then insert. Rows move as Avro flowfiles.</li>
+            <li class="stop" data-n="4"><strong>A funnel does not wait</strong>Each finished branch can start the warehouse. The facts can run once per branch, not once after every table has loaded.</li>
+            <li class="nifi-step" data-n="5"><strong>SQL lives inside processors</strong>Dimensions insert a version open until 9999-12-31, then close the previous row. Facts delete that window and insert the aggregate into Wataniya_DWH.</li>
+            <li class="nifi-step" data-n="6"><strong>Avaya also refreshes a cube</strong>Four facts load, and a separate processor starts the SSAS job every 5 minutes. The trace of a run is NiFi provenance.</li>
+          </ol>
+        </article>
+        <article class="lane python">
+          <h3>Python job — EMPLOYEE only</h3>
+          <ol class="flow">
+            <li class="api" data-n="1"><strong>One HTTP call starts the work</strong>FastAPI takes one job at a time and returns a run id. A second call while it is running gets 409.</li>
+            <li class="db" data-n="2"><strong>Extract is a copy</strong>Oracle EMPLOYEE, filtered on MAKEDATE, lands in PostgreSQL <code>raw.employee</code>. No technical columns are added to the row.</li>
+            <li class="api" data-n="3"><strong>Transform is SQL, one layer at a time</strong>The call passes <code>layer</code>: <code>staging</code>, <code>dimension</code>, or <code>fact</code>. Python splits the file name on <code>__</code>, takes the number, and runs that layer in that order. <code>V1__stg_raw_employee.sql</code> is first. <code>V2__dim_employee.sql</code> is next, with no source schema because the source is already in the warehouse.</li>
+            <li class="db" data-n="4"><strong>Same dimension rule, new schema</strong><code>V1__stg_raw_employee.sql</code> builds <code>reportingdw.stg_employee</code> from <code>raw.employee</code>. <code>V2__dim_employee.sql</code> builds <code>reportingdw.dim_employee</code>. The latest row stays open at 9999-12-31.</li>
+            <li class="log" data-n="5"><strong>The run is the audit trail</strong>Every step is a line in <code>logs/etl-YYYY-MM-DD.log</code> and a row in <code>etl.run_event</code>. You poll <code>GET /runs/{run_id}</code>.</li>
+            <li class="src" data-n="6"><strong>The other tables are in the map below</strong>Kastle, Avaya, the dimensions, and the facts are listed. Only <code>raw.employee</code>, <code>stg_employee</code>, and <code>dim_employee</code> have a load today. The rest wait for their SQL file.</li>
+          </ol>
+        </article>
+      </div>
+      <div class="compare">
+        <article>
+          <h3>Where rows land</h3>
+          <p>NiFi writes SQL Server STG, then Wataniya_DWH. Python writes PostgreSQL <code>raw</code>, then <code>reportingdw</code>.</p>
+        </article>
+        <article>
+          <h3>Who shapes the row</h3>
+          <p>NiFi shapes rows in processors and carries them as Avro. Python copies the source. The SQL file does the rest.</p>
+        </article>
+        <article>
+          <h3>How you prove the run</h3>
+          <p>NiFi uses canvas provenance. Python gives you a run id, a daily file, and <code>etl.run_event</code>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="detail" id="extract">
+      <h2>Extract and load, in the order it happens</h2>
+      <p class="lead"><code>POST /jobs/extract</code> with <code>job</code>, <code>start_dt</code>, and <code>end_dt</code>. The end date is included, even when MAKEDATE has a time.</p>
+      <div class="legend">
+        <span class="src">Yellow — source</span>
+        <span class="db">Green — PostgreSQL</span>
+        <span class="api">Blue — what you click</span>
+        <span class="log">Gray — the run log</span>
+        <span class="stop">Red — stop or failure</span>
+      </div>
+      <ol class="flow">
+        <li class="api" data-n="1"><strong>Request</strong>Body is <code>{"job":"employee","start_dt":"2026-06-01","end_dt":"2026-06-30"}</code>. Change the dates to the window you want to show.</li>
+        <li class="stop" data-n="2"><strong>Gate</strong>An unknown job returns 404. A job that is not enabled returns 409. If any ETL job is already running, this call returns 409 and creates no run.</li>
+        <li class="log" data-n="3"><strong>Run row, then 202</strong>The API inserts <code>etl.run</code> as queued and returns <code>run_id</code>. The load continues after the response.</li>
+        <li class="src" data-n="4"><strong>Oracle read</strong><code>SELECT * FROM PULSE_NFC_PROD.EMPLOYEE</code> where MAKEDATE is on or after the start date and before the day after the end date. The log records the connect and the columns. The password is not logged.</li>
+        <li class="db" data-n="5"><strong>Create raw.employee the first time</strong>Text for character data, numeric for NUMBER, timestamp for dates. Names are lowercased. If the table already exists with a different column list, the run fails instead of loading into the wrong shape.</li>
+        <li class="db" data-n="6"><strong>Replace the window</strong>Truncate <code>raw.employee</code>, then COPY in batches of 5,000. Each batch logs its size, the running total, and how long it took.</li>
+        <li class="log" data-n="7"><strong>Close the run</strong>Status becomes success, or failed with the error. The lock is released either way. <code>raw.employee</code> holds this window only.</li>
+        <li class="api" data-n="8"><strong>What you show</strong>Refresh <code>GET /runs/{run_id}</code> until status is success. Read the connect line, the column list, the truncate, the batches, and the committed row count. The same text is in the daily log file.</li>
+        <li class="stop" data-n="9"><strong>Do not continue on a failed extract</strong>Transform reads <code>raw.employee</code>. If this run failed, stop the demo here and show the error on the run.</li>
+      </ol>
+    </section>
+
+    <section class="detail" id="transform">
+      <h2>Transform and load, in the order it happens</h2>
+      <p class="lead"><code>POST /jobs/transform</code> with <code>layer</code> and the same two dates. Call <code>staging</code> first, then <code>dimension</code>. Each call is a new run id. Python executes that layer's SQL.</p>
+      <ol class="flow">
+        <li class="api" data-n="9"><strong>Request</strong>Body is <code>{"layer":"staging","start_dt":"2026-06-01","end_dt":"2026-06-30"}</code>. Repeat with <code>"layer":"dimension"</code> after staging succeeds. The one-job lock applies to each call.</li>
+        <li class="api" data-n="10"><strong>Hand the dates to SQL</strong>The runner sets session values <code>etl.start_dt</code> and <code>etl.end_dt</code>. The file reads them with <code>current_setting</code>.</li>
+        <li class="src" data-n="11"><strong>Files in version order</strong><code>staging</code> runs <code>V1__stg_raw_employee.sql</code>. <code>dimension</code> runs <code>V2__dim_employee.sql</code>. <code>fact</code> has no file yet, so that call logs an empty layer and finishes.</li>
+        <li class="db" data-n="12"><strong>Staging copy — statements 1 to 3</strong>Create <code>reportingdw.stg_employee</code> like <code>raw.employee</code>, truncate it, and insert every raw row. Staging is still the extract.</li>
+        <li class="db" data-n="13"><strong>Dimension table — statements 1 and 2</strong>This is the dimension call. <code>employee_sk</code> is an identity key. The business codes are text. <code>start_dt</code> and <code>end_dt</code> are dates. Unique on employee and start date.</li>
+        <li class="db" data-n="14"><strong>Latest row in the window — statement 3</strong>One row per <code>employeeid</code>, the latest <code>makedate</code>. <code>end_dt</code> is 9999-12-31. If that version is already loaded, it is skipped, so running the demo twice does not stack duplicates.</li>
+        <li class="db" data-n="15"><strong>Close the previous open version — statement 4</strong>Among rows still open, the older end date becomes the day before the next start date. The newest row stays open. This is the NiFi employee rule.</li>
+        <li class="stop" data-n="16"><strong>If a statement fails</strong>That statement rolls back. Earlier statements in the file stay committed. The sequence stops, the run is failed, and the log has the statement text and the database error.</li>
+        <li class="api" data-n="17"><strong>What you show</strong>The staging run has three statement lines. The dimension run has four. Then count <code>raw.employee</code>, <code>reportingdw.stg_employee</code>, and <code>reportingdw.dim_employee</code>. Staging should match raw. The dimension should show one open row per employee from this window.</li>
+      </ol>
+    </section>
+
+    <section class="detail" id="tables">
+      <h2>Tables in the flow</h2>
+      <p class="lead">Each source table lands as-is in <code>raw</code>. The transform then writes <code>reportingdw</code>. A green name is the one this demo actually loads. The others are the NiFi tables, shown so the map is complete.</p>
+      <div class="table-groups">
+        <article>
+          <h3>raw — Kastle, from Oracle PULSE_NFC_PROD</h3>
+          <p>Most of these reload the <code>MAKEDATE</code> window. The note on a chip is the exception.</p>
+          <div class="chips">
+            <span class="chip live">employee<small>running today</small></span>
+            <span class="chip">cif_customer</span>
+            <span class="chip">cif_customer_mx</span>
+            <span class="chip">cif_address</span>
+            <span class="chip">cif_employment_dtl</span>
+            <span class="chip">cif_identification_details</span>
+            <span class="chip">cif_custincomebreakup_hdr</span>
+            <span class="chip">company_generic<small>first 100,000 rows, KEY becomes KEY_MS</small></span>
+            <span class="chip">company_employee_role</span>
+            <span class="chip">product</span>
+            <span class="chip">prd_scheme</span>
+            <span class="chip">lot_loan_t</span>
+            <span class="chip">lot_globalloan_t</span>
+            <span class="chip">lot_employment_dtl</span>
+            <span class="chip">lot_penaltyinterestrate_dtl</span>
+            <span class="chip">lmt_loan_dtl</span>
+            <span class="chip">lmt_appropriated_data</span>
+            <span class="chip">lmt_rcpt_dtl</span>
+            <span class="chip">lct_loan_dtl</span>
+            <span class="chip">lct_daily_coll_status<small>filtered on FROM_DATE</small></span>
+            <span class="chip">nfc_sales_with_status<small>application, approved, funded, rejected, or pending date</small></span>
+            <span class="chip">mis_sale_target<small>full copy</small></span>
+            <span class="chip">collection_target<small>full copy</small></span>
+            <span class="chip">coll_month_distribution<small>full copy</small></span>
+            <span class="chip">ext_simah_rpt_header</span>
+          </div>
+        </article>
+        <article>
+          <h3>raw — Avaya, from KPIVision</h3>
+          <p>Each load keeps rows newer than the latest timestamp already in the matching fact.</p>
+          <div class="chips">
+            <span class="chip">cccallview<small>ServiceStamp, feeds fact_avaya</small></span>
+            <span class="chip">dagentperformanceview<small>Timestamp, feeds fact_agent_performance</small></span>
+            <span class="chip">iagentperformancestat<small>Timestamp, feeds fact_agent_performance_stat</small></span>
+            <span class="chip">agentloginlogoutview<small>Timestamp, feeds fact_agent_session</small></span>
+          </div>
+        </article>
+      </div>
+      <div class="pair">
+        <article class="wide">
+          <h3>reportingdw dimensions</h3>
+          <p>Each one keeps history. A new version stays open until 9999-12-31, then the previous open row is closed.</p>
+          <div class="chips">
+            <span class="chip live">dim_employee<small>from employee. Running today.</small></span>
+            <span class="chip">dim_customer<small>cif_customer, income, employment, address, identification, company_generic</small></span>
+            <span class="chip">dim_loan<small>lmt_loan_dtl, lct_loan_dtl, penalty rate</small></span>
+            <span class="chip">dim_scheme<small>prd_scheme</small></span>
+            <span class="chip">dim_product<small>product plus the current scheme. Runs after dim_scheme.</small></span>
+            <span class="chip">dim_company_generic<small>company_generic, overwrite on GENERICID</small></span>
+          </div>
+        </article>
+        <article class="wide">
+          <h3>reportingdw facts</h3>
+          <p>These are the aggregations NiFi already publishes. Each one is deleted for the window, then inserted again.</p>
+          <div class="chips">
+            <span class="chip">fact_app_cust_product<small>sales, global loan, customer, employee role, plus the current dimension keys</small></span>
+            <span class="chip">fact_emp_target<small>mis_sale_target joined to dim_employee</small></span>
+            <span class="chip">fact_loan_collection_monthly<small>daily collection, month distribution, appropriated amounts</small></span>
+            <span class="chip">fact_avaya</span>
+            <span class="chip">fact_agent_session</span>
+            <span class="chip">fact_agent_performance</span>
+            <span class="chip">fact_agent_performance_stat</span>
+          </div>
+        </article>
+      </div>
+      <p class="lead">Every raw table also gets a <code>reportingdw.stg_</code> copy of itself before the dimension or fact SQL reads it. <code>stg_employee</code> is the one created today. NiFi also reads <code>DATE_PARAM_VW</code> and <code>CALENDAR</code>. Those are not source extracts.</p>
+    </section>
+
+    <section class="script" id="script">
+      <h2>Click this, in this order</h2>
+      <ol>
+        <li>Open <code>http://127.0.0.1:8000/docs</code> and show <code>GET /health</code> returning status ok.</li>
+        <li>Show <code>GET /jobs</code>. <code>employee</code>, <code>V1__stg_raw_employee</code>, and <code>V2__dim_employee</code> are enabled.</li>
+        <li>Send <code>POST /jobs/extract</code>. Copy the <code>run_id</code>.</li>
+        <li>Send <code>GET /runs/{run_id}</code> until status is success. Scroll the events.</li>
+        <li>Send <code>POST /jobs/transform</code> with <code>layer</code> set to <code>staging</code> and the same dates. Poll that run id.</li>
+        <li>Send <code>POST /jobs/transform</code> again with <code>layer</code> set to <code>dimension</code>. Poll that run id.</li>
+        <li>Show the three staging statements and the four dimension statements, then the three table counts.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>

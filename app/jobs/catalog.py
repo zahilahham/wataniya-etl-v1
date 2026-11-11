@@ -7,7 +7,18 @@ class Job:
     kind: str
     enabled: bool
     description: str
+    layer: str | None = None
 
+
+LAYERS = ("staging", "dimension", "fact")
+
+LAYER_PREFIX = {
+    "staging": "stg_",
+    "dimension": "dim_",
+    "fact": "fact_",
+}
+
+_PLACEHOLDER = "Placeholder. Add the matching V{n}__name.sql file to include it."
 
 _KASTLE_EXTRACTS = (
     "lot_loan_t",
@@ -40,48 +51,80 @@ _KASTLE_EXTRACTS = (
     "agentloginlogoutview",
 )
 
-_PLANNED_TRANSFORMS = (
-    "020_lot_loan_t",
-    "030_product",
-    "040_lct_loan_dtl",
-    "050_lct_daily_coll_status",
-    "060_prd_scheme",
-    "070_coll_month_distribution",
-    "080_company_generic",
-    "090_ext_simah_rpt_header",
-    "100_lmt_rcpt_dtl",
-    "110_lot_globalloan_t",
-    "120_lmt_loan_dtl",
-    "130_lmt_appropriated_data",
-    "140_cif_customer_mx",
-    "150_lot_penaltyinterestrate_dtl",
-    "160_cif_employment_dtl",
-    "170_cif_identification_details",
-    "180_company_employee_role",
-    "190_cif_custincomebreakup_hdr",
-    "200_nfc_sales_with_status",
-    "210_cif_address",
-    "220_mis_sale_target",
-    "230_collection_target",
-    "240_cif_customer",
-    "250_lot_employment_dtl",
-    "260_dim_customer",
-    "270_dim_loan",
-    "280_dim_scheme",
-    "290_dim_product",
-    "300_dim_company_generic",
-    "310_fact_app_cust_product",
-    "320_fact_emp_target",
-    "330_fact_loan_collection_monthly",
-    "340_fact_avaya",
-    "350_fact_agent_session",
-    "360_fact_agent_performance",
-    "370_fact_agent_performance_stat",
-    "380_cccallview",
-    "390_dagentperformanceview",
-    "400_iagentperformancestat",
-    "410_agentloginlogoutview",
+_STAGING_OBJECTS = (
+    "employee",
+    "lot_loan_t",
+    "product",
+    "lct_loan_dtl",
+    "lct_daily_coll_status",
+    "prd_scheme",
+    "coll_month_distribution",
+    "company_generic",
+    "ext_simah_rpt_header",
+    "lmt_rcpt_dtl",
+    "lot_globalloan_t",
+    "lmt_loan_dtl",
+    "lmt_appropriated_data",
+    "cif_customer_mx",
+    "lot_penaltyinterestrate_dtl",
+    "cif_employment_dtl",
+    "cif_identification_details",
+    "company_employee_role",
+    "cif_custincomebreakup_hdr",
+    "nfc_sales_with_status",
+    "cif_address",
+    "mis_sale_target",
+    "collection_target",
+    "cif_customer",
+    "lot_employment_dtl",
+    "cccallview",
+    "dagentperformanceview",
+    "iagentperformancestat",
+    "agentloginlogoutview",
 )
+
+_DIMENSION_OBJECTS = (
+    "employee",
+    "customer",
+    "loan",
+    "scheme",
+    "product",
+    "company_generic",
+)
+
+_FACT_OBJECTS = (
+    "app_cust_product",
+    "emp_target",
+    "loan_collection_monthly",
+    "avaya",
+    "agent_session",
+    "agent_performance",
+    "agent_performance_stat",
+)
+
+_LIVE = {
+    ("staging", "V1__stg_raw_employee"): "Copies raw.employee into reportingdw.stg_employee",
+    ("dimension", "V2__dim_employee"): "Builds reportingdw.dim_employee from reportingdw.stg_employee",
+}
+
+
+def _versioned(layer: str, objects: tuple[str, ...], start: int = 1) -> tuple[str, ...]:
+    prefix = "stg_raw_" if layer == "staging" else LAYER_PREFIX[layer]
+    return tuple(f"V{number}__{prefix}{name}" for number, name in enumerate(objects, start=start))
+
+
+def _layer_jobs(layer: str, names: tuple[str, ...]) -> tuple[Job, ...]:
+    return tuple(
+        Job(
+            name=name,
+            kind="transform",
+            enabled=(layer, name) in _LIVE,
+            description=_LIVE.get((layer, name), _PLACEHOLDER),
+            layer=layer,
+        )
+        for name in names
+    )
+
 
 JOBS: tuple[Job, ...] = (
     Job(
@@ -99,24 +142,10 @@ JOBS: tuple[Job, ...] = (
         )
         for name in _KASTLE_EXTRACTS
     ),
-    Job(
-        name="010_employee",
-        kind="transform",
-        enabled=True,
-        description="Builds reportingdw.stg_employee and reportingdw.dim_employee",
-    ),
-    *(
-        Job(
-            name=name,
-            kind="transform",
-            enabled=False,
-            description="Placeholder folder. Add V1__transformation_job.sql to include it.",
-        )
-        for name in _PLANNED_TRANSFORMS
-    ),
+    *_layer_jobs("staging", _versioned("staging", _STAGING_OBJECTS)),
+    *_layer_jobs("dimension", _versioned("dimension", _DIMENSION_OBJECTS, start=2)),
+    *_layer_jobs("fact", _versioned("fact", _FACT_OBJECTS)),
 )
-
-PLANNED_TRANSFORM_FOLDERS = _PLANNED_TRANSFORMS
 
 
 def list_jobs() -> list[dict[str, object]]:

@@ -1,14 +1,14 @@
 # Wataniya ETL
 
-On-demand extract and SQL transform. Python loads one Oracle table into PostgreSQL unchanged. A single function then runs versioned SQL files in folder order and writes the reporting tables.
+On-demand extract and SQL transform. Python loads one Oracle table into PostgreSQL unchanged. `sql_transformation/` holds only SQL files. The number is the run order. A load from outside the warehouse is named `V1__stg_raw_employee.sql`. A later step whose source is already in the warehouse is named `V2__dim_employee.sql`.
 
-`EMPLOYEE` is the only live extract. The other folders under `sql_transformation/` are placeholders.
+`EMPLOYEE` is the only live extract. The other jobs are placeholders.
 
 ## What a run does
 
 1. `POST /jobs/extract` reads `PULSE_NFC_PROD.EMPLOYEE` for a date window and loads it into `raw.employee`.
-2. `POST /jobs/transform` runs `sql_transformation/*/V1__transformation_job.sql` in folder-name order.
-3. The employee script fills `reportingdw.stg_employee` and `reportingdw.dim_employee`.
+2. `POST /jobs/transform` takes a `layer` of `staging`, `dimension`, or `fact`. The runner splits each file name on `__`, reads the number, and runs that layer's files in that order. `stg_` is staging, `dim_` is dimension, and `fact_` is fact.
+3. `staging` fills `reportingdw.stg_employee`. `dimension` fills `reportingdw.dim_employee`. `fact` has no SQL yet.
 
 Startup creates the `raw`, `reportingdw`, and `etl` schemas. Each step is written to `logs/etl-YYYY-MM-DD.log` and to `etl.run_event`.
 
@@ -90,15 +90,21 @@ The `events` list is the detailed step log: Oracle connect, columns, truncate, e
 curl "http://127.0.0.1:8000/logs/daily?date=2026-11-05"
 ```
 
-After the extract succeeds, run the SQL transform for the same window:
+After the extract succeeds, run staging, then dimension, for the same window. Each call is its own run.
 
 ```text
 curl -X POST http://127.0.0.1:8000/jobs/transform ^
   -H "Content-Type: application/json" ^
-  -d "{\"start_dt\":\"2026-06-01\",\"end_dt\":\"2026-06-30\"}"
+  -d "{\"layer\":\"staging\",\"start_dt\":\"2026-06-01\",\"end_dt\":\"2026-06-30\"}"
 ```
 
-Poll that `run_id` the same way. A failed statement stops the SQL sequence. The event message includes the statement preview and the database error.
+```text
+curl -X POST http://127.0.0.1:8000/jobs/transform ^
+  -H "Content-Type: application/json" ^
+  -d "{\"layer\":\"dimension\",\"start_dt\":\"2026-06-01\",\"end_dt\":\"2026-06-30\"}"
+```
+
+`layer` must be `staging`, `dimension`, or `fact`. The run's `job` column stores that layer. Poll each `run_id` the same way. A failed statement stops that layer. The event message includes the statement preview and the database error.
 
 Confirm the tables:
 
@@ -116,7 +122,7 @@ SELECT COUNT(*) FROM reportingdw.dim_employee;
 curl http://127.0.0.1:8000/jobs
 ```
 
-`employee` and `010_employee` are enabled. Every other job is reserved for a later SQL file. The runner ignores a folder until `V1__transformation_job.sql` exists and contains at least one statement.
+`employee`, `V1__stg_raw_employee`, and `V2__dim_employee` are enabled. Every other job is reserved until its SQL file is added. The runner reads the files in `sql_transformation/` and runs only the layer you pass.
 
 ## Tests
 

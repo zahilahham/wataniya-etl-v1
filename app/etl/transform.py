@@ -6,9 +6,8 @@ from pathlib import Path
 
 from psycopg import Connection
 
+from app.jobs.catalog import LAYER_PREFIX, LAYERS
 from app.logging_setup import RunLog
-
-SQL_FILE_NAME = "V1__transformation_job.sql"
 
 
 def execute_sql_transformations(
@@ -17,21 +16,24 @@ def execute_sql_transformations(
     start_dt: date,
     end_dt: date,
     sql_dir: Path,
+    layer: str,
 ) -> None:
-    """Read V1 transformation files in folder order and execute each statement."""
+    """Read one layer's SQL files in version order and execute each statement."""
+    if layer not in LAYERS:
+        raise ValueError(f"Unknown transform layer: {layer}")
     _set_window(connection, start_dt, end_dt)
     run_log.event(
         "INFO",
         "transform_window",
-        f"Session window set to {start_dt.isoformat()} through {end_dt.isoformat()}",
+        f"{layer} window set to {start_dt.isoformat()} through {end_dt.isoformat()}",
     )
-    files = list_transformation_files(sql_dir)
+    files = list_transformation_files(sql_dir, layer)
     if not files:
-        run_log.event("INFO", "transform", f"No {SQL_FILE_NAME} files under {sql_dir}")
+        run_log.event("INFO", "transform", f"No {layer} SQL files in {sql_dir}")
         return
 
     for path in files:
-        relative = f"{path.parent.name}/{path.name}"
+        relative = path.name
         script = path.read_text(encoding="utf-8")
         statements = [item for item in split_sql(script) if _is_executable(item)]
         if not statements:
@@ -58,10 +60,37 @@ def execute_sql_transformations(
         )
 
 
-def list_transformation_files(sql_dir: Path) -> list[Path]:
+def transformation_order(path: Path) -> tuple[int, str]:
+    """Split V1__stg_raw_employee.sql on __ and return the version number plus the object name."""
+    stem = path.name[:-4] if path.name.endswith(".sql") else ""
+    version_token, separator, object_name = stem.partition("__")
+    if (
+        not separator
+        or not object_name
+        or len(version_token) < 2
+        or version_token[0] != "V"
+        or not version_token[1:].isdigit()
+    ):
+        raise ValueError(f"SQL file must be named like V1__stg_raw_employee.sql: {path.name}")
+    return int(version_token[1:]), object_name
+
+
+def list_transformation_files(sql_dir: Path, layer: str) -> list[Path]:
+    if layer not in LAYERS:
+        raise ValueError(f"Unknown transform layer: {layer}")
     if not sql_dir.is_dir():
         return []
-    return sorted(sql_dir.glob(f"*/{SQL_FILE_NAME}"), key=lambda path: path.parent.name.lower())
+    prefix = LAYER_PREFIX[layer]
+    chosen: list[tuple[int, str, Path]] = []
+    for path in sql_dir.glob("*.sql"):
+        version, object_name = transformation_order(path)
+        if object_name.startswith(prefix):
+            chosen.append((version, object_name, path))
+    chosen.sort(key=lambda item: (item[0], item[1]))
+    versions = [item[0] for item in chosen]
+    if len(versions) != len(set(versions)):
+        raise ValueError(f"Duplicate version number in {layer}")
+    return [item[2] for item in chosen]
 
 
 def split_sql(script: str) -> list[str]:

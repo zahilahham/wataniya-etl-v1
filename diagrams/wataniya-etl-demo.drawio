@@ -1,0 +1,278 @@
+<mxfile host="65bd71144e">
+    <diagram id="difference" name="1. The difference">
+        <mxGraphModel dx="491" dy="769" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="Wataniya ETL demo — what changes, and what stays the same" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=26;fontStyle=1;fontColor=#1B3A4B;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="24" width="1500" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="subtitle" value="NiFi already builds this warehouse. The Python job is the same employee rule, with an explicit extract, SQL transforms, and a run log you can read." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=14;fontColor=#3D4F58;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="64" width="1500" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="leftLane" value="NiFi today — full estate" style="swimlane;horizontal=1;startSize=42;fillColor=#F7F1FA;strokeColor=#9673A6;fontSize=16;fontStyle=1;fontColor=#5B3A6E;rounded=1;arcSize=4;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="110" width="760" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="l1" value="&lt;b&gt;1. Two sources&lt;/b&gt;&lt;br&gt;Oracle Kastle, many tables in PULSE_NFC_PROD.&lt;br&gt;Avaya KPIVision, four call and agent views." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=14;" parent="leftLane" vertex="1">
+                    <mxGeometry x="28" y="58" width="704" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="l2" value="&lt;b&gt;2. The window comes from a view&lt;/b&gt;&lt;br&gt;DATE_PARAM_VW holds start and end. Kastle starts at 12:30.&lt;br&gt;Avaya repeats every 15 minutes from the latest fact timestamp." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=14;" parent="leftLane" vertex="1">
+                    <mxGeometry x="28" y="168" width="704" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3" value="&lt;b&gt;3. Each table is its own group&lt;/b&gt;&lt;br&gt;Truncate SQL Server STG, read the source, stamp PG_NAME, LD_STRT_DT, and EXE_ID, then insert.&lt;br&gt;Rows travel as Avro flowfiles between processors." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=14;" parent="leftLane" vertex="1">
+                    <mxGeometry x="28" y="278" width="704" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4" value="&lt;b&gt;4. Success links are the schedule&lt;/b&gt;&lt;br&gt;A finished branch sends a flowfile onward. A funnel does not wait for the other branches.&lt;br&gt;The warehouse can therefore start once per branch, not once per day." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#F8CECC;strokeColor=#B85450;fontSize=14;" parent="leftLane" vertex="1">
+                    <mxGeometry x="28" y="396" width="704" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="l5" value="&lt;b&gt;5. Transforms are SQL inside processors&lt;/b&gt;&lt;br&gt;Dimensions insert a version with end date 9999-12-31, then close the previous open row.&lt;br&gt;Facts delete the window and insert the aggregate. Target database: Wataniya_DWH." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=14;" parent="leftLane" vertex="1">
+                    <mxGeometry x="28" y="514" width="704" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="l6" value="&lt;b&gt;6. Avaya has one extra hop&lt;/b&gt;&lt;br&gt;Four facts are loaded, and a separate processor starts the SSAS cube job every 5 minutes.&lt;br&gt;Proof of a run is NiFi provenance, not a queryable log table." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=14;" parent="leftLane" vertex="1">
+                    <mxGeometry x="28" y="632" width="704" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="le1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#9673A6;strokeWidth=2;" parent="leftLane" source="l1" target="l2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="le2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#9673A6;strokeWidth=2;" parent="leftLane" source="l2" target="l3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="le3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#9673A6;strokeWidth=2;" parent="leftLane" source="l3" target="l4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="le4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#9673A6;strokeWidth=2;" parent="leftLane" source="l4" target="l5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="le5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#9673A6;strokeWidth=2;" parent="leftLane" source="l5" target="l6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="rightLane" value="Python job for this demo — EMPLOYEE only" style="swimlane;horizontal=1;startSize=42;fillColor=#F4F8FB;strokeColor=#6C8EBF;fontSize=16;fontStyle=1;fontColor=#1B3A4B;rounded=1;arcSize=4;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="110" width="760" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="r1" value="&lt;b&gt;1. One HTTP call starts the work&lt;/b&gt;&lt;br&gt;FastAPI accepts one job at a time and returns a run id immediately.&lt;br&gt;A second call while it is running gets 409." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;" parent="rightLane" vertex="1">
+                    <mxGeometry x="28" y="58" width="704" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="r2" value="&lt;b&gt;2. Extract is a copy, not a transform&lt;/b&gt;&lt;br&gt;Oracle EMPLOYEE, filtered on MAKEDATE, lands in PostgreSQL raw.employee.&lt;br&gt;Column names are lowercased. No PG_NAME, LD_STRT_DT, or EXE_ID on the row." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=14;" parent="rightLane" vertex="1">
+                    <mxGeometry x="28" y="168" width="704" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="r3" value="&lt;b&gt;3. Transform is SQL, one layer at a time&lt;/b&gt;&lt;br&gt;The call passes layer: staging, dimension, or fact.&lt;br&gt;Split on __, take the number, run that layer in that order.&lt;br&gt;V1__stg_raw_employee.sql, then V2__dim_employee.sql." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=14;" parent="rightLane" vertex="1">
+                    <mxGeometry x="28" y="286" width="704" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="r4" value="&lt;b&gt;4. Same dimension rule, new schema&lt;/b&gt;&lt;br&gt;V1__stg_raw_employee.sql builds reportingdw.stg_employee from raw.employee.&lt;br&gt;V2__dim_employee.sql builds reportingdw.dim_employee. Latest row stays open at 9999-12-31." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=14;" parent="rightLane" vertex="1">
+                    <mxGeometry x="28" y="404" width="704" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="r5" value="&lt;b&gt;5. The run is the audit trail&lt;/b&gt;&lt;br&gt;Every step is a line in logs/etl-YYYY-MM-DD.log and a row in etl.run_event.&lt;br&gt;GET /runs/{run_id} shows status, row counts, statement previews, and errors." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#F5F5F5;strokeColor=#666666;fontSize=14;" parent="rightLane" vertex="1">
+                    <mxGeometry x="28" y="522" width="704" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="r6" value="&lt;b&gt;6. The other tables are on page 3&lt;/b&gt;&lt;br&gt;Kastle, Avaya, dimensions, and facts are listed there.&lt;br&gt;Only raw.employee, stg_employee, and dim_employee run today." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;spacingRight=10;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=14;" parent="rightLane" vertex="1">
+                    <mxGeometry x="28" y="640" width="704" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="re1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="rightLane" source="r1" target="r2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="re2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="rightLane" source="r2" target="r3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="re3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="rightLane" source="r3" target="r4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="re4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="rightLane" source="r4" target="r5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="re5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="rightLane" source="r5" target="r6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c1" value="&lt;b&gt;Where rows land&lt;/b&gt;&lt;br&gt;NiFi: SQL Server STG, then Wataniya_DWH.&lt;br&gt;Python: PostgreSQL raw, then reportingdw." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#FFF8E8;strokeColor=#D6B656;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="890" width="500" height="88" as="geometry"/>
+                </mxCell>
+                <mxCell id="c2" value="&lt;b&gt;Who shapes the row&lt;/b&gt;&lt;br&gt;NiFi: processors and Avro between them.&lt;br&gt;Python: extract copies. SQL files do the rest." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#E8F2FA;strokeColor=#6C8EBF;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="560" y="890" width="500" height="88" as="geometry"/>
+                </mxCell>
+                <mxCell id="c3" value="&lt;b&gt;How you prove the run&lt;/b&gt;&lt;br&gt;NiFi: canvas provenance.&lt;br&gt;Python: run id, daily log, etl.run_event." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#EEF6EA;strokeColor=#82B366;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="1080" y="890" width="520" height="88" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="demoflow" name="2. Demo flow in detail">
+        <mxGraphModel dx="491" dy="769" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="2000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="dtitle" value="Demo flow — EMPLOYEE extract, then the SQL transform" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=26;fontStyle=1;fontColor=#1B3A4B;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="20" width="1500" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="dsub" value="Call extract. Wait until that run is success. Then call transform with the same dates. Do not start transform while extract is still running." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=14;fontColor=#3D4F58;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="60" width="1500" height="28" as="geometry"/>
+                </mxCell>
+                <mxCell id="extLane" value="A. Extract and load — POST /jobs/extract" style="swimlane;horizontal=1;startSize=40;fillColor=#F4F8FB;strokeColor=#6C8EBF;fontSize=16;fontStyle=1;fontColor=#1B3A4B;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="104" width="760" height="1180" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" value="&lt;b&gt;1. Request&lt;/b&gt;&lt;br&gt;Body: job = employee, start_dt, end_dt.&lt;br&gt;Both dates are calendar dates. The end date is included." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="56" width="712" height="84" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" value="&lt;b&gt;2. Gate&lt;/b&gt;&lt;br&gt;Unknown job returns 404. A disabled job returns 409.&lt;br&gt;If any ETL job is already running, this call returns 409 and does nothing." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#F8CECC;strokeColor=#B85450;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="156" width="712" height="84" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" value="&lt;b&gt;3. Run row, then 202&lt;/b&gt;&lt;br&gt;Insert etl.run with status queued, pipeline extract, and the date window.&lt;br&gt;Response: run_id. The work continues in the background." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#F5F5F5;strokeColor=#666666;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="256" width="712" height="84" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" value="&lt;b&gt;4. Oracle read&lt;/b&gt;&lt;br&gt;SELECT * FROM PULSE_NFC_PROD.EMPLOYEE&lt;br&gt;WHERE MAKEDATE is on or after start_dt and before the day after end_dt.&lt;br&gt;The log records the connect and the column list. The password is never logged." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="356" width="712" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" value="&lt;b&gt;5. Create raw.employee on first run&lt;/b&gt;&lt;br&gt;VARCHAR, CHAR, and CLOB become text. NUMBER becomes numeric. DATE and TIMESTAMP become timestamp.&lt;br&gt;Names are lowercased. If the table exists with different columns, the run fails." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="472" width="712" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" value="&lt;b&gt;6. Replace the window&lt;/b&gt;&lt;br&gt;TRUNCATE raw.employee, then COPY in batches of 5,000.&lt;br&gt;Each batch logs its size, the running total, and the duration. Then the commit is logged." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="588" width="712" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" value="&lt;b&gt;7. Close the run&lt;/b&gt;&lt;br&gt;Status becomes success, or failed with the error text.&lt;br&gt;The lock is released either way. raw.employee now holds only this window." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#F5F5F5;strokeColor=#666666;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="696" width="712" height="84" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" value="&lt;b&gt;8. What you show&lt;/b&gt;&lt;br&gt;GET /runs/{run_id} until status is success.&lt;br&gt;Point at connect, column list, truncate, batch lines, and the final row count.&lt;br&gt;The same lines are in logs/etl-YYYY-MM-DD.log." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="796" width="712" height="108" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" value="&lt;b&gt;Stop here if extract failed.&lt;/b&gt;&lt;br&gt;Transform reads raw.employee. An empty or failed extract should not be followed by a transform in the demo." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#F8CECC;strokeColor=#B85450;fontSize=13;" parent="extLane" vertex="1">
+                    <mxGeometry x="24" y="920" width="712" height="84" as="geometry"/>
+                </mxCell>
+                <mxCell id="ee1" style="endArrow=block;html=1;strokeColor=#6C8EBF;strokeWidth=2;rounded=0;" parent="extLane" source="e1" target="e2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ee2" style="endArrow=block;html=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="extLane" source="e2" target="e3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ee3" style="endArrow=block;html=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="extLane" source="e3" target="e4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ee4" style="endArrow=block;html=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="extLane" source="e4" target="e5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ee5" style="endArrow=block;html=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="extLane" source="e5" target="e6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ee6" style="endArrow=block;html=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="extLane" source="e6" target="e7" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ee7" style="endArrow=block;html=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="extLane" source="e7" target="e8" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="ee8" style="endArrow=block;html=1;strokeColor=#B85450;strokeWidth=2;" parent="extLane" source="e8" target="e9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="trLane" value="B. Transform and load — POST /jobs/transform" style="swimlane;horizontal=1;startSize=40;fillColor=#F3F8F1;strokeColor=#82B366;fontSize=16;fontStyle=1;fontColor=#2D5A27;rounded=1;" parent="1" vertex="1">
+                    <mxGeometry x="840" y="104" width="760" height="1180" as="geometry"/>
+                </mxCell>
+                <mxCell id="t1" value="&lt;b&gt;9. Request&lt;/b&gt;&lt;br&gt;Body: layer, start_dt, and end_dt. Call staging, then dimension.&lt;br&gt;Each call is a new run id. Same one-job lock." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="56" width="712" height="84" as="geometry"/>
+                </mxCell>
+                <mxCell id="t2" value="&lt;b&gt;10. Hand the dates to SQL&lt;/b&gt;&lt;br&gt;The runner sets session values etl.start_dt and etl.end_dt.&lt;br&gt;The SQL file reads them with current_setting. Python does not rewrite the business rules." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="156" width="712" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="t3" value="&lt;b&gt;11. Files in folder order&lt;/b&gt;&lt;br&gt;staging runs V1__stg_raw_employee.sql. dimension runs V2__dim_employee.sql.&lt;br&gt;fact has no file yet, so that call logs an empty layer and finishes." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="264" width="712" height="84" as="geometry"/>
+                </mxCell>
+                <mxCell id="t4" value="&lt;b&gt;12. Staging copy — statements 1 to 3&lt;/b&gt;&lt;br&gt;CREATE reportingdw.stg_employee LIKE raw.employee.&lt;br&gt;TRUNCATE it. INSERT every row from raw.employee.&lt;br&gt;Staging is the extract, still unshaped." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="364" width="712" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="t5" value="&lt;b&gt;13. Dimension table — statements 1 and 2&lt;/b&gt;&lt;br&gt;employee_sk is an identity key.&lt;br&gt;employeeid, employeecode, employeename, status, cg_locationcode are text.&lt;br&gt;start_dt and end_dt are dates. Unique on employeeid + start_dt." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="480" width="712" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="t6" value="&lt;b&gt;14. Keep the latest row in the window — statement 3&lt;/b&gt;&lt;br&gt;Partition by employeeid, order by makedate descending, take row 1.&lt;br&gt;end_dt is 9999-12-31. If that employee and start date already exist, skip it." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="596" width="712" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="t7" value="&lt;b&gt;15. Close the previous open version — statement 4&lt;/b&gt;&lt;br&gt;Among rows still dated 9999-12-31, order by start_dt.&lt;br&gt;The older row's end_dt becomes the day before the next start_dt. The newest stays open." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="704" width="712" height="92" as="geometry"/>
+                </mxCell>
+                <mxCell id="t8" value="&lt;b&gt;16. If a statement fails&lt;/b&gt;&lt;br&gt;That statement is rolled back. Earlier statements in the file stay committed.&lt;br&gt;The sequence stops. The run status is failed. The log has the statement preview and the database error." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#F8CECC;strokeColor=#B85450;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="812" width="712" height="100" as="geometry"/>
+                </mxCell>
+                <mxCell id="t9" value="&lt;b&gt;17. What you show&lt;/b&gt;&lt;br&gt;The staging run has three statement lines. The dimension run has four.&lt;br&gt;Then: SELECT COUNT(*) FROM raw.employee, reportingdw.stg_employee, reportingdw.dim_employee.&lt;br&gt;stg should match raw. dim should be one open row per employee in the window, plus older history." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;" parent="trLane" vertex="1">
+                    <mxGeometry x="24" y="928" width="712" height="116" as="geometry"/>
+                </mxCell>
+                <mxCell id="te1" style="endArrow=block;html=1;strokeColor=#82B366;strokeWidth=2;" parent="trLane" source="t1" target="t2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="te2" style="endArrow=block;html=1;strokeColor=#82B366;strokeWidth=2;" parent="trLane" source="t2" target="t3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="te3" style="endArrow=block;html=1;strokeColor=#82B366;strokeWidth=2;" parent="trLane" source="t3" target="t4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="te4" style="endArrow=block;html=1;strokeColor=#82B366;strokeWidth=2;" parent="trLane" source="t4" target="t5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="te5" style="endArrow=block;html=1;strokeColor=#82B366;strokeWidth=2;" parent="trLane" source="t5" target="t6" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="te6" style="endArrow=block;html=1;strokeColor=#82B366;strokeWidth=2;" parent="trLane" source="t6" target="t7" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="te7" style="endArrow=block;html=1;strokeColor=#82B366;strokeWidth=2;" parent="trLane" source="t7" target="t8" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="te8" style="endArrow=block;html=1;strokeColor=#6C8EBF;strokeWidth=2;" parent="trLane" source="t8" target="t9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="bridge" value="After step 8 is success, start column B. Extract and transform are separate calls on purpose." style="rounded=1;whiteSpace=wrap;html=1;align=center;fillColor=#1B3A4B;fontColor=#FFFFFF;strokeColor=#1B3A4B;fontSize=14;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1310" width="1560" height="48" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg1" value="Yellow = source system" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="1380" width="250" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg2" value="Green = PostgreSQL tables" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="1380" width="270" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg3" value="Blue = API and what you click" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="600" y="1380" width="280" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg4" value="Gray = run log" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="900" y="1380" width="200" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="leg5" value="Red = stop or failure" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8CECC;strokeColor=#B85450;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1120" y="1380" width="220" height="36" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+  <diagram id="tables" name="3. Tables">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="ttitle" value="Tables — raw copy, then reportingdw" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=26;fontStyle=1;fontColor=#1B3A4B;" vertex="1" parent="1">
+          <mxGeometry x="40" y="24" width="1500" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="tsub" value="Green is loaded in this demo. Every other name is a NiFi table on the same pattern. Each raw table later gets a reportingdw.stg_ copy of itself." style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=14;fontColor=#3D4F58;" vertex="1" parent="1">
+          <mxGeometry x="40" y="64" width="1560" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="kastle" value="raw — Kastle (Oracle PULSE_NFC_PROD)" style="swimlane;startSize=36;fillColor=#FFF8E8;strokeColor=#D6B656;fontSize=15;fontStyle=1;rounded=1;horizontal=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="110" width="780" height="620" as="geometry"/>
+        </mxCell>
+        <mxCell id="kbody" value="&lt;b&gt;Loaded today&lt;/b&gt;&lt;br&gt;employee — MAKEDATE window&lt;br&gt;&lt;br&gt;&lt;b&gt;Customer&lt;/b&gt;&lt;br&gt;cif_customer, cif_customer_mx, cif_address, cif_employment_dtl, cif_identification_details, cif_custincomebreakup_hdr&lt;br&gt;&lt;br&gt;&lt;b&gt;Organization and product&lt;/b&gt;&lt;br&gt;company_generic (first 100,000 rows, KEY becomes KEY_MS), company_employee_role, product, prd_scheme&lt;br&gt;&lt;br&gt;&lt;b&gt;Loan&lt;/b&gt;&lt;br&gt;lot_loan_t, lot_globalloan_t, lot_employment_dtl, lot_penaltyinterestrate_dtl, lmt_loan_dtl, lmt_appropriated_data, lmt_rcpt_dtl, lct_loan_dtl&lt;br&gt;&lt;br&gt;&lt;b&gt;Not a MAKEDATE window&lt;/b&gt;&lt;br&gt;lct_daily_coll_status — FROM_DATE&lt;br&gt;nfc_sales_with_status — application, approved, funded, rejected, or pending date&lt;br&gt;mis_sale_target, collection_target, coll_month_distribution — full copy&lt;br&gt;ext_simah_rpt_header — MAKEDATE window" style="text;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;fontSize=13;strokeColor=none;fillColor=none;" vertex="1" parent="kastle">
+          <mxGeometry x="16" y="48" width="748" height="552" as="geometry"/>
+        </mxCell>
+        <mxCell id="avaya" value="raw — Avaya (KPIVision)" style="swimlane;startSize=36;fillColor=#FFF8E8;strokeColor=#D6B656;fontSize=15;fontStyle=1;rounded=1;horizontal=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="110" width="760" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="abody" value="Rows newer than the latest timestamp already stored on the fact.&lt;br&gt;&lt;br&gt;&lt;b&gt;cccallview&lt;/b&gt; — ServiceStamp — fact_avaya&lt;br&gt;&lt;b&gt;dagentperformanceview&lt;/b&gt; — Timestamp — fact_agent_performance&lt;br&gt;&lt;b&gt;iagentperformancestat&lt;/b&gt; — Timestamp — fact_agent_performance_stat&lt;br&gt;&lt;b&gt;agentloginlogoutview&lt;/b&gt; — Timestamp — fact_agent_session" style="text;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;fontSize=14;strokeColor=none;fillColor=none;" vertex="1" parent="avaya">
+          <mxGeometry x="16" y="48" width="728" height="210" as="geometry"/>
+        </mxCell>
+        <mxCell id="dims" value="reportingdw dimensions" style="swimlane;startSize=36;fillColor=#F3F8F1;strokeColor=#82B366;fontSize=15;fontStyle=1;rounded=1;horizontal=1;" vertex="1" parent="1">
+          <mxGeometry x="840" y="410" width="760" height="320" as="geometry"/>
+        </mxCell>
+        <mxCell id="dbody" value="&lt;b&gt;dim_employee&lt;/b&gt; — employee. This one runs today.&lt;br&gt;&lt;b&gt;dim_customer&lt;/b&gt; — cif_customer, income, employment, address, identification, company_generic&lt;br&gt;&lt;b&gt;dim_loan&lt;/b&gt; — lmt_loan_dtl, lct_loan_dtl, penalty rate&lt;br&gt;&lt;b&gt;dim_scheme&lt;/b&gt; — prd_scheme&lt;br&gt;&lt;b&gt;dim_product&lt;/b&gt; — product, after dim_scheme&lt;br&gt;&lt;b&gt;dim_company_generic&lt;/b&gt; — company_generic, overwrite on GENERICID&lt;br&gt;&lt;br&gt;Open version ends 9999-12-31. The previous open row is closed to the day before the new start." style="text;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=4;fontSize=14;strokeColor=none;fillColor=none;" vertex="1" parent="dims">
+          <mxGeometry x="16" y="46" width="728" height="258" as="geometry"/>
+        </mxCell>
+        <mxCell id="facts" value="reportingdw facts — the aggregations" style="swimlane;startSize=36;fillColor=#F3F8F1;strokeColor=#82B366;fontSize=15;fontStyle=1;rounded=1;horizontal=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="750" width="1560" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="fbody" value="&lt;b&gt;fact_app_cust_product&lt;/b&gt; — nfc_sales_with_status, lot_globalloan_t, cif_customer_mx, cif_customer, company_employee_role, and the current customer, loan, product, and employee keys&lt;br&gt;&lt;br&gt;&lt;b&gt;fact_emp_target&lt;/b&gt; — mis_sale_target joined to dim_employee&lt;br&gt;&lt;br&gt;&lt;b&gt;fact_loan_collection_monthly&lt;/b&gt; — lct_daily_coll_status, coll_month_distribution, lmt_appropriated_data, and the current dimension keys&lt;br&gt;&lt;br&gt;&lt;b&gt;fact_avaya, fact_agent_session, fact_agent_performance, fact_agent_performance_stat&lt;/b&gt; — one fact per Avaya view above&lt;br&gt;&lt;br&gt;NiFi deletes the window and inserts again. None of these facts run in today's demo." style="text;html=1;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;fontSize=14;strokeColor=none;fillColor=none;" vertex="1" parent="facts">
+          <mxGeometry x="16" y="46" width="1528" height="218" as="geometry"/>
+        </mxCell>
+        <mxCell id="note" value="Also used by NiFi, and not a source extract: DATE_PARAM_VW supplies the window. CALENDAR is read while building dim_customer. Each raw table gets a reportingdw.stg_ copy of itself before the dimension or fact SQL." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=12;fillColor=#F5F5F5;strokeColor=#666666;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1050" width="1560" height="64" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

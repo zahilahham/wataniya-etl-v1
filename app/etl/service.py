@@ -42,7 +42,7 @@ def run_extract(run_id: UUID, job: str, start_dt: date, end_dt: date) -> None:
         release()
 
 
-def run_transform(run_id: UUID, start_dt: date, end_dt: date) -> None:
+def run_transform(run_id: UUID, layer: str, start_dt: date, end_dt: date) -> None:
     log: RunLog | None = None
     try:
         log = RunLog(run_id)
@@ -50,14 +50,14 @@ def run_transform(run_id: UUID, start_dt: date, end_dt: date) -> None:
         log.event(
             "INFO",
             "transform",
-            f"Transform started for window {start_dt.isoformat()} to {end_dt.isoformat()}",
+            f"Transform started for {layer} window {start_dt.isoformat()} to {end_dt.isoformat()}",
         )
         settings = get_settings()
         with connect() as conn:
-            execute_sql_transformations(conn, log, start_dt, end_dt, settings.sql_dir)
+            execute_sql_transformations(conn, log, start_dt, end_dt, settings.sql_dir, layer)
             conn.commit()
         log.set_status("success")
-        log.event("INFO", "transform", "Transform finished")
+        log.event("INFO", "transform", f"Transform finished for {layer}")
     except Exception as exc:
         if log is None:
             _mark_failed_without_log(run_id, exc)

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -28,6 +29,10 @@ class WindowRequest(BaseModel):
 
 class ExtractRequest(WindowRequest):
     job: str = Field(min_length=1)
+
+
+class TransformRequest(WindowRequest):
+    layer: Literal["staging", "dimension", "fact"]
 
 
 class AcceptedRun(BaseModel):
@@ -72,15 +77,15 @@ def post_extract(body: ExtractRequest, background_tasks: BackgroundTasks) -> Acc
 
 
 @router.post("/jobs/transform", status_code=202, response_model=AcceptedRun)
-def post_transform(body: WindowRequest, background_tasks: BackgroundTasks) -> AcceptedRun:
+def post_transform(body: TransformRequest, background_tasks: BackgroundTasks) -> AcceptedRun:
     return _accept(
         background_tasks,
         pipeline="transform",
-        job=None,
+        job=body.layer,
         start_dt=body.start_dt,
         end_dt=body.end_dt,
         worker=run_transform,
-        worker_args=(body.start_dt, body.end_dt),
+        worker_args=(body.layer, body.start_dt, body.end_dt),
     )
 
 

@@ -4,6 +4,12 @@ from pathlib import Path
 
 from app.etl.transform import _is_executable, list_transformation_files, split_sql
 
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _read_sql(name: str) -> str:
+    return (ROOT / "sql_transformation" / name).read_text(encoding="utf-8")
+
 
 class SplitSqlTests(unittest.TestCase):
     def test_splits_on_semicolons(self) -> None:
@@ -42,13 +48,18 @@ class SplitSqlTests(unittest.TestCase):
         self.assertFalse(_is_executable("/* hide; */"))
         self.assertTrue(_is_executable("SELECT 1"))
 
-    def test_employee_transformation_has_seven_statements(self) -> None:
-        script_path = Path(__file__).resolve().parents[1] / "sql_transformation" / "010_employee" / "V1__transformation_job.sql"
-        script = script_path.read_text(encoding="utf-8")
+    def test_employee_staging_has_three_statements(self) -> None:
+        script = _read_sql("V1__stg_raw_employee.sql")
         statements = [item for item in split_sql(script) if _is_executable(item)]
-        self.assertEqual(len(statements), 7)
+        self.assertEqual(len(statements), 3)
         self.assertIn("reportingdw.stg_employee", statements[0])
-        self.assertIn("reportingdw.dim_employee", statements[3])
+        self.assertNotIn("reportingdw.dim_employee", script)
+
+    def test_employee_dimension_has_four_statements(self) -> None:
+        script = _read_sql("V2__dim_employee.sql")
+        statements = [item for item in split_sql(script) if _is_executable(item)]
+        self.assertEqual(len(statements), 4)
+        self.assertIn("reportingdw.dim_employee", statements[0])
         self.assertTrue(statements[-1].lstrip().upper().startswith("WITH"))
 
 
@@ -64,16 +75,69 @@ class OracleTypeTests(unittest.TestCase):
 
 
 class TransformationOrderTests(unittest.TestCase):
-    def test_files_are_sorted_by_folder_name(self) -> None:
+    def test_files_run_in_version_order_for_the_requested_layer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for name in ("030_product", "010_employee", "020_scheme"):
-                folder = root / name
-                folder.mkdir()
-                (folder / "V1__transformation_job.sql").write_text("SELECT 1;", encoding="utf-8")
-            (root / "040_empty").mkdir()
-            found = [path.parent.name for path in list_transformation_files(root)]
-        self.assertEqual(found, ["010_employee", "020_scheme", "030_product"])
+            for name in (
+                "V10__stg_late.sql",
+                "V2__stg_second.sql",
+                "V1__stg_employee.sql",
+                "V1__dim_employee.sql",
+                "V1__fact_avaya.sql",
+            ):
+                (root / name).write_text("SELECT 1;", encoding="utf-8")
+            staging = [path.name for path in list_transformation_files(root, "staging")]
+            dimension = [path.name for path in list_transformation_files(root, "dimension")]
+            fact = [path.name for path in list_transformation_files(root, "fact")]
+        self.assertEqual(staging, ["V1__stg_employee.sql", "V2__stg_second.sql", "V10__stg_late.sql"])
+        self.assertEqual(dimension, ["V1__dim_employee.sql"])
+        self.assertEqual(fact, ["V1__fact_avaya.sql"])
+
+    def test_duplicate_version_in_one_layer_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "V1__stg_employee.sql").write_text("SELECT 1;", encoding="utf-8")
+            (root / "V1__stg_product.sql").write_text("SELECT 1;", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                list_transformation_files(root, "staging")
+
+    def test_a_file_without_a_version_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "stg_employee.sql").write_text("SELECT 1;", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                list_transformation_files(root, "staging")
+
+
+class LayerCatalogTests(unittest.TestCase):
+    def test_names_use_the_source_schema_only_outside_the_warehouse(self) -> None:
+        from app.jobs.catalog import JOBS, LAYERS
+
+        self.assertEqual(LAYERS, ("staging", "dimension", "fact"))
+        staging = [job.name for job in JOBS if job.layer == "staging"]
+        dimension = [job.name for job in JOBS if job.layer == "dimension"]
+        fact = [job.name for job in JOBS if job.layer == "fact"]
+        self.assertEqual(
+            [int(name.split("__", 1)[0][1:]) for name in staging],
+            list(range(1, len(staging) + 1)),
+        )
+        self.assertTrue(all(name.split("__", 1)[1].startswith("stg_raw_") for name in staging))
+        self.assertEqual(
+            [int(name.split("__", 1)[0][1:]) for name in dimension],
+            list(range(2, len(dimension) + 2)),
+        )
+        self.assertTrue(all(name.split("__", 1)[1].startswith("dim_") for name in dimension))
+        self.assertEqual(
+            [int(name.split("__", 1)[0][1:]) for name in fact],
+            list(range(1, len(fact) + 1)),
+        )
+        self.assertTrue(all("__stg_" not in name and "__raw_" not in name for name in fact))
+
+    def test_employee_files_are_v1_staging_and_v2_dimension(self) -> None:
+        from app.jobs.catalog import JOBS
+
+        live = [(job.layer, job.name) for job in JOBS if job.kind == "transform" and job.enabled]
+        self.assertEqual(live, [("staging", "V1__stg_raw_employee"), ("dimension", "V2__dim_employee")])
 
 
 if __name__ == "__main__":

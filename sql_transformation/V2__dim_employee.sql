@@ -1,13 +1,5 @@
--- Rebuild the employee staging copy and the open-ended employee dimension.
+-- Build the open-ended employee dimension from reportingdw.stg_employee.
 -- etl.start_dt and etl.end_dt are set by the Python runner for this session.
-
-CREATE TABLE IF NOT EXISTS reportingdw.stg_employee (LIKE raw.employee INCLUDING ALL);
-
-TRUNCATE TABLE reportingdw.stg_employee;
-
-INSERT INTO reportingdw.stg_employee
-SELECT *
-FROM raw.employee;
 
 CREATE TABLE IF NOT EXISTS reportingdw.dim_employee (
     employee_sk bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
