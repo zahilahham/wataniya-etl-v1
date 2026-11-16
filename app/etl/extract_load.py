@@ -10,6 +10,7 @@ from psycopg import Connection, sql
 
 from app.config import Settings
 from app.logging_setup import RunLog
+from app.sources import connect_oracle
 
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 _PG_TYPES = {
@@ -46,9 +47,6 @@ def extract_employee(
     settings: Settings,
 ) -> int:
     schema = _oracle_schema(settings.kstl_schema)
-    if not settings.oracle_user or not settings.oracle_dsn:
-        raise RuntimeError("ORACLE_USER and ORACLE_DSN must be set before extract")
-
     end_exclusive = end_dt + timedelta(days=1)
     query = (
         f"SELECT * FROM {schema}.EMPLOYEE "
@@ -60,15 +58,8 @@ def extract_employee(
         f"Connecting to Oracle for {schema}.EMPLOYEE "
         f"window {start_dt.isoformat()} to {end_dt.isoformat()}",
     )
-    import oracledb
-
-    oracledb.defaults.fetch_decimals = True
     started = time.perf_counter()
-    with oracledb.connect(
-        user=settings.oracle_user,
-        password=settings.oracle_password,
-        dsn=settings.oracle_dsn,
-    ) as source:
+    with connect_oracle(settings) as source:
         run_log.event(
             "INFO",
             "connect_oracle",

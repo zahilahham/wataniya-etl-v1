@@ -1,4 +1,5 @@
 .env
+.env.github
 logs/
 __pycache__/
 *.py[cod]
@@ -9,3 +10,6 @@ __pycache__/
 # NiFi exports contain internal database hosts and usernames.
 NiFi_Flow.json
 PG_STG_*.json
+
+# Live catalog export. Hosts and warehouse SQL, no passwords.
+schema-snapshot.json
