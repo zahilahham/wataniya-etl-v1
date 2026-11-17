@@ -45,10 +45,6 @@ _KASTLE_EXTRACTS = (
     "collection_target",
     "cif_customer",
     "lot_employment_dtl",
-    "cccallview",
-    "dagentperformanceview",
-    "iagentperformancestat",
-    "agentloginlogoutview",
 )
 
 _STAGING_OBJECTS = (
@@ -77,10 +73,6 @@ _STAGING_OBJECTS = (
     "collection_target",
     "cif_customer",
     "lot_employment_dtl",
-    "cccallview",
-    "dagentperformanceview",
-    "iagentperformancestat",
-    "agentloginlogoutview",
 )
 
 _DIMENSION_OBJECTS = (
@@ -96,10 +88,6 @@ _FACT_OBJECTS = (
     "app_cust_product",
     "emp_target",
     "loan_collection_monthly",
-    "avaya",
-    "agent_session",
-    "agent_performance",
-    "agent_performance_stat",
 )
 
 _LIVE = {

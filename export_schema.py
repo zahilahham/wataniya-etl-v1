@@ -1,12 +1,13 @@
-"""Write schema-snapshot.json from the databases in .env.
+"""Write schema-snapshot.json from Oracle and PostgreSQL in .env.
 
 Run from this project:
 
     .venv\\Scripts\\python.exe export_schema.py
 
-The file has column lists, keys, view text, and stored SQL. It has no
-passwords and no table rows. If NiFi_Flow.json or PG_STG_*.json is in
-this folder, processor SQL from those files is included too.
+Oracle is the only source. PostgreSQL is the data lake. The file has
+column lists, keys, and view text. It has no passwords and no table rows.
+If NiFi_Flow.json or PG_STG_*.json is in this folder, processor SQL from
+those files is included too.
 """
 
 from __future__ import annotations
@@ -24,27 +25,11 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from app.config import get_settings
-from app.jobs.catalog import (  # noqa: E402
-    _DIMENSION_OBJECTS,
-    _FACT_OBJECTS,
-    _STAGING_OBJECTS,
-)
-from app.sources import connect_oracle, connect_sqlserver, stg_target, vault_target  # noqa: E402
+from app.jobs.catalog import _STAGING_OBJECTS  # noqa: E402
+from app.sources import connect_oracle  # noqa: E402
 
 MAX_SQL_CHARS = 400_000
-MAX_RELATIONS = 3000
-EXTRA_SOURCES = ("date_param_vw", "calendar")
-SOURCE_NAMES = tuple(dict.fromkeys((*_STAGING_OBJECTS, *EXTRA_SOURCES)))
-OUTPUT_NAMES = tuple(
-    dict.fromkeys(
-        f"dim_{name}" for name in _DIMENSION_OBJECTS
-    )
-) + tuple(f"fact_{name}" for name in _FACT_OBJECTS)
-MENTION_RE = re.compile(
-    r"\b(" + "|".join(re.escape(name) for name in (*SOURCE_NAMES, *OUTPUT_NAMES)) + r")\b",
-    re.I,
-)
-DETAIL_DB_RE = re.compile(r"wataniya|dwh|kpivision|kastle", re.I)
+SOURCE_NAMES = tuple(dict.fromkeys(_STAGING_OBJECTS))
 SQL_RE = re.compile(r"(?is)\b(select|insert|update|delete|merge|with|create|truncate)\b")
 SECRET_KEY_RE = re.compile(r"password|secret|token|credential", re.I)
 
@@ -91,47 +76,6 @@ def json_ready(value: Any) -> Any:
 
 def safe_error(exc: BaseException) -> str:
     return scrub(f"{type(exc).__name__}: {exc}")[:800]
-
-
-def interesting(name: str) -> bool:
-    lowered = name.lower()
-    if lowered in SOURCE_NAMES or lowered in OUTPUT_NAMES:
-        return True
-    return (
-        lowered.startswith(("dim_", "fact_", "stg_", "raw_"))
-        or "date_param" in lowered
-        or "_dim_" in lowered
-        or "_fact_" in lowered
-    )
-
-
-def name_predicate(column_sql: str) -> str:
-    marks = ", ".join("?" for _ in SOURCE_NAMES)
-    return f"""(
-        LOWER({column_sql}) IN ({marks})
-        OR LOWER({column_sql}) LIKE 'dim[_]%'
-        OR LOWER({column_sql}) LIKE 'fact[_]%'
-        OR LOWER({column_sql}) LIKE 'stg[_]%'
-        OR LOWER({column_sql}) LIKE 'raw[_]%'
-        OR LOWER({column_sql}) LIKE '%date[_]param%'
-        OR LOWER({column_sql}) LIKE '%[_]dim[_]%'
-        OR LOWER({column_sql}) LIKE '%[_]fact[_]%'
-        OR LOWER({column_sql}) = 'calendar'
-    )"""
-
-
-def name_params() -> tuple[str, ...]:
-    return tuple(name.lower() for name in SOURCE_NAMES)
-
-
-def detail_whole_database(database: str, configured: str) -> bool:
-    if database.lower() == (configured or "").lower():
-        return True
-    return DETAIL_DB_RE.search(database) is not None
-
-
-def quote_ident(name: str) -> str:
-    return "[" + name.replace("]", "]]") + "]"
 
 
 def oracle_type(data_type: str, length: Any, precision: Any, scale: Any) -> str:
@@ -435,300 +379,6 @@ def probe_oracle(settings: Any, notes: list[str]) -> dict[str, Any]:
     return result
 
 
-def _rows(cursor: Any, sql: str, *params: Any) -> list[tuple[Any, ...]]:
-    cursor.execute(sql, *params)
-    return list(cursor.fetchall())
-
-
-def probe_sqlserver(target: Any, notes: list[str]) -> dict[str, Any]:
-    result: dict[str, Any] = {
-        "ok": False,
-        "error": None,
-        "host": target.host,
-        "port": target.port,
-        "database": target.database,
-        "user": target.user,
-        "server_name": None,
-        "login": None,
-        "databases": [],
-    }
-    try:
-        with connect_sqlserver(target) as connection:
-            cursor = connection.cursor()
-            cursor.execute("SELECT @@SERVERNAME, SUSER_SNAME()")
-            result["server_name"], result["login"] = cursor.fetchone()
-            cursor.execute(
-                """
-                SELECT name
-                FROM sys.databases
-                WHERE state = 0 AND name NOT IN ('master', 'tempdb', 'model', 'msdb')
-                ORDER BY name
-                """
-            )
-            database_names = [row[0] for row in cursor.fetchall()]
-            for database in database_names:
-                result["databases"].append(
-                    read_sqlserver_database(cursor, database, target.database, notes)
-                )
-        result["ok"] = True
-    except Exception as exc:
-        result["error"] = safe_error(exc)
-        notes.append(f"SQL Server {target.name} was not read. " + result["error"])
-    return result
-
-
-def read_sqlserver_database(
-    cursor: Any,
-    database: str,
-    configured: str,
-    notes: list[str],
-) -> dict[str, Any]:
-    quoted = quote_ident(database)
-    full = detail_whole_database(database, configured)
-    entry: dict[str, Any] = {
-        "name": database,
-        "detail": "full" if full else "matched",
-        "error": None,
-        "relations": [],
-        "relations_truncated": False,
-        "objects": [],
-    }
-    try:
-        relations = _rows(
-            cursor,
-            f"""
-            SELECT s.name, o.name, o.type,
-                   SUM(CASE WHEN p.index_id IN (0, 1) THEN p.rows ELSE 0 END)
-            FROM {quoted}.sys.objects o
-            JOIN {quoted}.sys.schemas s ON s.schema_id = o.schema_id
-            LEFT JOIN {quoted}.sys.partitions p ON p.object_id = o.object_id
-            WHERE o.is_ms_shipped = 0 AND o.type IN ('U', 'V')
-            GROUP BY s.name, o.name, o.type
-            ORDER BY s.name, o.name
-            """,
-        )
-        kind = {"U": "TABLE", "V": "VIEW"}
-        listed = relations
-        if len(relations) > MAX_RELATIONS:
-            entry["relations_truncated"] = True
-            kept = [row for row in relations if interesting(row[1])]
-            others = [row for row in relations if not interesting(row[1])]
-            listed = kept + others[:MAX_RELATIONS]
-        entry["relations"] = [
-            {"schema": schema, "name": name, "kind": kind.get(object_type, object_type), "rows": rows}
-            for schema, name, object_type, rows in listed
-        ]
-        selected = {
-            (schema, name)
-            for schema, name, _, _ in relations
-            if full or interesting(name)
-        }
-        if not selected and not full:
-            return entry
-        column_filter = "" if full else f"WHERE {name_predicate('c.TABLE_NAME')}"
-        column_params = () if full else name_params()
-        columns = _rows(
-            cursor,
-            f"""
-            SELECT c.TABLE_SCHEMA, c.TABLE_NAME, c.ORDINAL_POSITION, c.COLUMN_NAME,
-                   c.DATA_TYPE, c.CHARACTER_MAXIMUM_LENGTH, c.NUMERIC_PRECISION,
-                   c.NUMERIC_SCALE, c.IS_NULLABLE, c.COLUMN_DEFAULT
-            FROM {quoted}.INFORMATION_SCHEMA.COLUMNS c
-            {column_filter}
-            ORDER BY c.TABLE_SCHEMA, c.TABLE_NAME, c.ORDINAL_POSITION
-            """,
-            *column_params,
-        )
-        identities = {
-            (schema, table, column)
-            for schema, table, column in _rows(
-                cursor,
-                f"""
-                SELECT OBJECT_SCHEMA_NAME(object_id, DB_ID(?)), OBJECT_NAME(object_id, DB_ID(?)), name
-                FROM {quoted}.sys.identity_columns
-                """,
-                database,
-                database,
-            )
-        }
-        primary: dict[tuple[str, str], list[tuple[Any, str]]] = defaultdict(list)
-        for schema, table, position, column in _rows(
-            cursor,
-            f"""
-            SELECT sch.name, t.name, ic.key_ordinal, c.name
-            FROM {quoted}.sys.indexes i
-            JOIN {quoted}.sys.index_columns ic
-              ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-            JOIN {quoted}.sys.columns c
-              ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-            JOIN {quoted}.sys.tables t ON t.object_id = i.object_id
-            JOIN {quoted}.sys.schemas sch ON sch.schema_id = t.schema_id
-            WHERE i.is_primary_key = 1
-            ORDER BY sch.name, t.name, ic.key_ordinal
-            """,
-        ):
-            primary[(schema, table)].append((position, column))
-        unique: dict[tuple[str, str, str], list[tuple[Any, str]]] = defaultdict(list)
-        for schema, table, index_name, position, column in _rows(
-            cursor,
-            f"""
-            SELECT sch.name, t.name, i.name, ic.key_ordinal, c.name
-            FROM {quoted}.sys.indexes i
-            JOIN {quoted}.sys.index_columns ic
-              ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-            JOIN {quoted}.sys.columns c
-              ON c.object_id = ic.object_id AND c.column_id = ic.column_id
-            JOIN {quoted}.sys.tables t ON t.object_id = i.object_id
-            JOIN {quoted}.sys.schemas sch ON sch.schema_id = t.schema_id
-            WHERE i.is_unique_constraint = 1
-            ORDER BY sch.name, t.name, i.name, ic.key_ordinal
-            """,
-        ):
-            unique[(schema, table, index_name)].append((position, column))
-        foreign: dict[tuple[str, str, str], dict[str, Any]] = {}
-        for schema, table, fk_name, position, column, ref_schema, ref_table, ref_column in _rows(
-            cursor,
-            f"""
-            SELECT sch_p.name, obj_p.name, fk.name, fkc.constraint_column_id,
-                   col_p.name, sch_r.name, obj_r.name, col_r.name
-            FROM {quoted}.sys.foreign_keys fk
-            JOIN {quoted}.sys.foreign_key_columns fkc
-              ON fkc.constraint_object_id = fk.object_id
-            JOIN {quoted}.sys.tables obj_p ON obj_p.object_id = fk.parent_object_id
-            JOIN {quoted}.sys.schemas sch_p ON sch_p.schema_id = obj_p.schema_id
-            JOIN {quoted}.sys.columns col_p
-              ON col_p.object_id = fkc.parent_object_id
-             AND col_p.column_id = fkc.parent_column_id
-            JOIN {quoted}.sys.tables obj_r ON obj_r.object_id = fk.referenced_object_id
-            JOIN {quoted}.sys.schemas sch_r ON sch_r.schema_id = obj_r.schema_id
-            JOIN {quoted}.sys.columns col_r
-              ON col_r.object_id = fkc.referenced_object_id
-             AND col_r.column_id = fkc.referenced_column_id
-            ORDER BY sch_p.name, obj_p.name, fk.name, fkc.constraint_column_id
-            """,
-        ):
-            group = foreign.setdefault(
-                (schema, table, fk_name),
-                {
-                    "name": fk_name,
-                    "columns": [],
-                    "references": {"schema": ref_schema, "table": ref_table, "columns": []},
-                },
-            )
-            group["columns"].append((position, column))
-            group["references"]["columns"].append((position, ref_column))
-        definitions: dict[tuple[str, str], tuple[str, str | None, bool]] = {}
-        module_filter = "" if full else f"AND {name_predicate('o.name')}"
-        module_params = () if full else name_params()
-        for schema, name, object_type, definition in _rows(
-            cursor,
-            f"""
-            SELECT s.name, o.name, o.type, m.definition
-            FROM {quoted}.sys.sql_modules m
-            JOIN {quoted}.sys.objects o ON o.object_id = m.object_id
-            JOIN {quoted}.sys.schemas s ON s.schema_id = o.schema_id
-            WHERE o.is_ms_shipped = 0 AND o.type IN ('V', 'P', 'FN', 'IF', 'TF', 'TR')
-            {module_filter}
-            """,
-            *module_params,
-        ):
-            text_value = None if definition is None else str(definition)
-            mentions_warehouse = text_value is not None and MENTION_RE.search(text_value) is not None
-            if object_type == "V":
-                if not full and not interesting(name):
-                    continue
-            elif not interesting(name) and not (full and mentions_warehouse):
-                continue
-            text, truncated = clip_sql(text_value)
-            definitions[(schema, name)] = (object_type, text, truncated)
-        objects: dict[tuple[str, str], dict[str, Any]] = {}
-        relation_kind = {(schema, name): kind.get(object_type, object_type) for schema, name, object_type, _ in relations}
-        relation_rows = {(schema, name): rows for schema, name, _, rows in relations}
-        module_kind = {
-            "V": "VIEW",
-            "P": "PROCEDURE",
-            "FN": "FUNCTION",
-            "IF": "FUNCTION",
-            "TF": "FUNCTION",
-            "TR": "TRIGGER",
-        }
-        for schema, name in selected:
-            objects[(schema, name)] = {
-                "schema": schema,
-                "name": name,
-                "kind": relation_kind.get((schema, name), "TABLE"),
-                "rows": relation_rows.get((schema, name)),
-                "columns": [],
-                "primary_key": [],
-                "unique": [],
-                "foreign_keys": [],
-                "definition": None,
-                "definition_truncated": False,
-            }
-        for schema, name, object_type, text, truncated in (
-            (schema, name, object_type, text, truncated)
-            for (schema, name), (object_type, text, truncated) in definitions.items()
-        ):
-            item = objects.setdefault(
-                (schema, name),
-                {
-                    "schema": schema,
-                    "name": name,
-                    "kind": module_kind.get(object_type, object_type),
-                    "rows": None,
-                    "columns": [],
-                    "primary_key": [],
-                    "unique": [],
-                    "foreign_keys": [],
-                    "definition": None,
-                    "definition_truncated": False,
-                },
-            )
-            item["kind"] = module_kind.get(object_type, item["kind"])
-            item["definition"] = text
-            item["definition_truncated"] = truncated
-        for schema, table, position, column, data_type, length, precision, scale, nullable, default in columns:
-            item = objects.get((schema, table))
-            if item is None:
-                continue
-            item["columns"].append(
-                {
-                    "position": position,
-                    "name": column,
-                    "data_type": data_type,
-                    "length": length,
-                    "precision": precision,
-                    "scale": scale,
-                    "nullable": nullable == "YES",
-                    "identity": (schema, table, column) in identities,
-                    "default": None if default is None else scrub(str(default))[:500],
-                }
-            )
-        for (schema, table), pairs in primary.items():
-            if (schema, table) in objects:
-                objects[(schema, table)]["primary_key"] = [
-                    column for _, column in sorted(pairs, key=lambda pair: (pair[0] is None, pair[0]))
-                ]
-        for (schema, table, _), pairs in unique.items():
-            if (schema, table) in objects:
-                objects[(schema, table)]["unique"].append(
-                    [column for _, column in sorted(pairs, key=lambda pair: (pair[0] is None, pair[0]))]
-                )
-        for (schema, table, _), group in foreign.items():
-            if (schema, table) not in objects:
-                continue
-            group["columns"] = [column for _, column in sorted(group["columns"], key=lambda pair: (pair[0] is None, pair[0]))]
-            group["references"]["columns"] = [
-                column for _, column in sorted(group["references"]["columns"], key=lambda pair: (pair[0] is None, pair[0]))
-            ]
-            objects[(schema, table)]["foreign_keys"].append(group)
-        entry["objects"] = [objects[key] for key in sorted(objects)]
-    except Exception as exc:
-        entry["error"] = safe_error(exc)
-        notes.append(f"SQL Server database {database} was not read. " + entry["error"])
-    return entry
-
-
 def harvest_nifi(notes: list[str]) -> dict[str, Any]:
     paths = sorted(ROOT.glob("NiFi_Flow.json")) + sorted(ROOT.glob("PG_STG_*.json"))
     statements: list[dict[str, Any]] = []
@@ -828,31 +478,17 @@ def collect_sql_strings(node: Any, label: str, statements: list[dict[str, Any]])
 
 
 def gap_notes(payload: dict[str, Any], notes: list[str]) -> None:
-    located: set[str] = set()
-    oracle = payload.get("oracle") or {}
-    for item in oracle.get("objects") or []:
-        located.add(str(item.get("name", "")).lower())
-    for server in (payload.get("sqlserver") or {}).values():
-        for database in server.get("databases") or []:
-            for item in database.get("objects") or []:
-                located.add(str(item.get("name", "")).lower())
-            for item in database.get("relations") or []:
-                located.add(str(item.get("name", "")).lower())
+    located = {
+        str(item.get("name", "")).lower()
+        for item in (payload.get("oracle") or {}).get("objects") or []
+    }
     missing = [name for name in SOURCE_NAMES if name not in located]
     if missing:
-        notes.append("No column list was found for: " + ", ".join(missing))
-    missing_outputs = [name for name in OUTPUT_NAMES if name not in located]
-    if missing_outputs:
-        notes.append("Warehouse tables not found yet: " + ", ".join(missing_outputs))
-    definitions = 0
-    for server in (payload.get("sqlserver") or {}).values():
-        for database in server.get("databases") or []:
-            definitions += sum(1 for item in database.get("objects") or [] if item.get("definition"))
-    definitions += len((payload.get("nifi") or {}).get("statements") or [])
-    if definitions == 0:
+        notes.append("No Oracle column list was found for: " + ", ".join(missing))
+    if not (payload.get("nifi") or {}).get("statements"):
         notes.append(
-            "No stored SQL was found. Column lists are enough to create the raw and staging copies. "
-            "Dimension and fact rules need the SQL from NiFi_Flow.json or from procedures in the warehouse database."
+            "No NiFi SQL was found. Oracle column lists are enough to create the raw copies. "
+            "Dimension and fact rules need NiFi_Flow.json in this folder."
         )
 
 
@@ -869,10 +505,6 @@ def main() -> None:
         "source_names": list(SOURCE_NAMES),
         "postgres": probe_postgres(settings, notes),
         "oracle": probe_oracle(settings, notes),
-        "sqlserver": {
-            "stg": probe_sqlserver(stg_target(settings), notes),
-            "vault": probe_sqlserver(vault_target(settings), notes),
-        },
         "nifi": harvest_nifi(notes),
         "notes": notes,
     }
@@ -887,9 +519,6 @@ def main() -> None:
     for label in ("postgres", "oracle"):
         item = payload[label]
         print(f"{label} {'ok' if item.get('ok') else 'FAIL'} objects {len(item.get('objects') or [])}")
-    for label, item in payload["sqlserver"].items():
-        objects = sum(len(database.get("objects") or []) for database in item.get("databases") or [])
-        print(f"sqlserver {label} {'ok' if item.get('ok') else 'FAIL'} objects {objects}")
     print(f"nifi statements {len(payload['nifi']['statements'])}")
     for note in notes:
         print("note:", note)

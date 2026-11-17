@@ -40,17 +40,9 @@ ORACLE_USER=your_oracle_user
 ORACLE_PASSWORD=your_oracle_password
 ORACLE_DSN=host:1521/service_name
 KSTL_SCHEMA=PULSE_NFC_PROD
-STG_SQLSERVER_HOST=host
-STG_SQLSERVER_DATABASE=STG
-STG_SQLSERVER_USER=your_sqlserver_user
-STG_SQLSERVER_PASSWORD=your_sqlserver_password
-VAULT_SQLSERVER_HOST=host
-VAULT_SQLSERVER_DATABASE=VAULT
-VAULT_SQLSERVER_USER=your_sqlserver_user
-VAULT_SQLSERVER_PASSWORD=your_sqlserver_password
 ```
 
-`ORACLE_DSN` is the host, port, and service name from `CS_CONN_DB_KASTLE`, without the `jdbc:oracle:thin:@//` prefix. `STG_SQLSERVER_*` is `CS_CONN_STG`. `VAULT_SQLSERVER_*` is `CS_CONN_VAULT`. Do not commit `.env`.
+Oracle is the only source. PostgreSQL is the data lake: `raw` holds the extract and `reportingdw` holds the staging, dimension, and fact tables. `ORACLE_DSN` is the host, port, and service name from `CS_CONN_DB_KASTLE`, without the `jdbc:oracle:thin:@//` prefix. Do not commit `.env`.
 
 Example, if the local Postgres user is `postgres`:
 
