@@ -9,6 +9,7 @@ from typing import Any
 from psycopg import Connection, sql
 
 from app.config import Settings
+from app.jobs.catalog import EXTRACT_SPECS, ExtractSpec
 from app.logging_setup import RunLog
 from app.sources import connect_oracle
 
@@ -39,23 +40,24 @@ def map_oracle_type(type_code: object) -> str:
     return _PG_TYPES.get(name, "text")
 
 
-def extract_employee(
+def extract_source(
     conn: Connection,
     run_log: RunLog,
+    job: str,
     start_dt: date,
     end_dt: date,
     settings: Settings,
 ) -> int:
+    spec = EXTRACT_SPECS.get(job)
+    if spec is None:
+        raise RuntimeError(f"No extract implementation for {job}")
     schema = _oracle_schema(settings.kstl_schema)
     end_exclusive = end_dt + timedelta(days=1)
-    query = (
-        f"SELECT * FROM {schema}.EMPLOYEE "
-        "WHERE MAKEDATE >= :start_dt AND MAKEDATE < :end_dt_exclusive"
-    )
+    query, binds = build_extract_query(schema, spec, start_dt, end_exclusive)
     run_log.event(
         "INFO",
         "connect_oracle",
-        f"Connecting to Oracle for {schema}.EMPLOYEE "
+        f"Connecting to Oracle for {schema}.{spec.source} "
         f"window {start_dt.isoformat()} to {end_dt.isoformat()}",
     )
     started = time.perf_counter()
@@ -70,11 +72,11 @@ def extract_employee(
             source_cursor.arraysize = settings.extract_batch_size
             run_log.event("INFO", "query", query)
             query_started = time.perf_counter()
-            source_cursor.execute(
-                query,
-                {"start_dt": start_dt, "end_dt_exclusive": end_exclusive},
-            )
-            columns = _columns(source_cursor.description, run_log)
+            if binds:
+                source_cursor.execute(query, binds)
+            else:
+                source_cursor.execute(query)
+            columns = _columns(source_cursor.description, run_log, job)
             run_log.event(
                 "INFO",
                 "query",
@@ -83,8 +85,23 @@ def extract_employee(
                 ),
                 duration_ms=_elapsed_ms(query_started),
             )
-            _ensure_raw_employee(conn, columns, run_log)
-            return _copy_rows(conn, source_cursor, columns, run_log, settings.extract_batch_size)
+            _ensure_raw_table(conn, job, columns, run_log)
+            return _copy_rows(conn, job, source_cursor, columns, run_log, settings.extract_batch_size)
+
+
+def build_extract_query(
+    schema: str,
+    spec: ExtractSpec,
+    start_dt: date,
+    end_exclusive: date,
+) -> tuple[str, dict[str, date]]:
+    query = f"SELECT {spec.columns} FROM {schema}.{spec.source}"
+    if not spec.where:
+        return query, {}
+    query = f"{query} WHERE {spec.where}"
+    if ":start_dt" not in spec.where:
+        return query, {}
+    return query, {"start_dt": start_dt, "end_dt_exclusive": end_exclusive}
 
 
 def _oracle_schema(name: str) -> str:
@@ -93,9 +110,9 @@ def _oracle_schema(name: str) -> str:
     return name
 
 
-def _columns(description: list[Any] | None, run_log: RunLog) -> list[tuple[str, str]]:
+def _columns(description: list[Any] | None, run_log: RunLog, job: str) -> list[tuple[str, str]]:
     if not description:
-        raise RuntimeError("Oracle did not return a column list for EMPLOYEE")
+        raise RuntimeError(f"Oracle did not return a column list for {job}")
     columns: list[tuple[str, str]] = []
     seen: set[str] = set()
     for item in description:
@@ -116,8 +133,9 @@ def _columns(description: list[Any] | None, run_log: RunLog) -> list[tuple[str, 
     return columns
 
 
-def _ensure_raw_employee(
+def _ensure_raw_table(
     conn: Connection,
+    job: str,
     columns: list[tuple[str, str]],
     run_log: RunLog,
 ) -> None:
@@ -126,55 +144,58 @@ def _ensure_raw_employee(
             """
             SELECT column_name
             FROM information_schema.columns
-            WHERE table_schema = 'raw' AND table_name = 'employee'
+            WHERE table_schema = 'raw' AND table_name = %s
             ORDER BY ordinal_position
-            """
+            """,
+            (job,),
         )
         existing = [row["column_name"] for row in cur.fetchall()]
     names = [name for name, _ in columns]
     if existing:
         if existing != names:
             raise RuntimeError(
-                "raw.employee columns do not match this Oracle extract. "
+                f"raw.{job} columns do not match this Oracle extract. "
                 f"database={existing} oracle={names}"
             )
-        run_log.event("INFO", "raw_table", "raw.employee already exists")
+        run_log.event("INFO", "raw_table", f"raw.{job} already exists")
         return
 
     definitions = sql.SQL(", ").join(
         sql.SQL("{} {}").format(sql.Identifier(name), sql.SQL(pg_type))
         for name, pg_type in columns
     )
-    statement = sql.SQL("CREATE TABLE raw.employee ({})").format(definitions)
+    statement = sql.SQL("CREATE TABLE raw.{} ({})").format(sql.Identifier(job), definitions)
     with conn.cursor() as cur:
         cur.execute(statement)
     conn.commit()
     run_log.event(
         "INFO",
         "raw_table",
-        "Created raw.employee (" + ", ".join(f"{name} {pg_type}" for name, pg_type in columns) + ")",
+        f"Created raw.{job} (" + ", ".join(f"{name} {pg_type}" for name, pg_type in columns) + ")",
     )
 
 
 def _copy_rows(
     conn: Connection,
+    job: str,
     source_cursor: Any,
     columns: list[tuple[str, str]],
     run_log: RunLog,
     batch_size: int,
 ) -> int:
     column_names = [name for name, _ in columns]
-    copy_sql = sql.SQL("COPY raw.employee ({}) FROM STDIN").format(
-        sql.SQL(", ").join(sql.Identifier(name) for name in column_names)
+    copy_sql = sql.SQL("COPY raw.{} ({}) FROM STDIN").format(
+        sql.Identifier(job),
+        sql.SQL(", ").join(sql.Identifier(name) for name in column_names),
     )
     with conn.cursor() as cur:
         truncate_started = time.perf_counter()
-        cur.execute("TRUNCATE TABLE raw.employee")
+        cur.execute(sql.SQL("TRUNCATE TABLE raw.{}").format(sql.Identifier(job)))
     conn.commit()
     run_log.event(
         "INFO",
         "truncate",
-        "Truncated raw.employee",
+        f"Truncated raw.{job}",
         duration_ms=_elapsed_ms(truncate_started),
     )
     total = 0
@@ -194,14 +215,14 @@ def _copy_rows(
         run_log.event(
             "INFO",
             "load_batch",
-            f"Copied batch {batch_number} into raw.employee (total {total})",
+            f"Copied batch {batch_number} into raw.{job} (total {total})",
             rows=len(fetched),
             duration_ms=_elapsed_ms(batch_started),
         )
     run_log.event(
         "INFO",
         "commit",
-        f"Committed {total} rows into raw.employee",
+        f"Committed {total} rows into raw.{job}",
         rows=total,
     )
     return total

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 from app.db import connect
 from app.etl.lock import release, try_acquire
 from app.etl.runs import create_run, get_run, list_runs
-from app.etl.service import run_extract, run_transform
+from app.etl.service import run_extract, run_load, run_transform
 from app.jobs.catalog import get_extract_job, list_jobs
 from app.logging_setup import daily_log_file, safe_db_error
 
@@ -56,6 +56,19 @@ def health() -> dict[str, str]:
 @router.get("/jobs")
 def jobs() -> dict[str, list[dict[str, object]]]:
     return {"jobs": list_jobs()}
+
+
+@router.post("/jobs/load", status_code=202, response_model=AcceptedRun)
+def post_load(body: WindowRequest, background_tasks: BackgroundTasks) -> AcceptedRun:
+    return _accept(
+        background_tasks,
+        pipeline="load",
+        job="load",
+        start_dt=body.start_dt,
+        end_dt=body.end_dt,
+        worker=run_load,
+        worker_args=(body.start_dt, body.end_dt),
+    )
 
 
 @router.post("/jobs/extract", status_code=202, response_model=AcceptedRun)

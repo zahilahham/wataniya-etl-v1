@@ -2,13 +2,13 @@
 
 On-demand extract and SQL transform. Python loads one Oracle table into PostgreSQL unchanged. `sql_transformation/` holds only SQL files. The number is the run order. A load from outside the warehouse is named `V1__stg_raw_employee.sql`. A later step whose source is already in the warehouse is named `V2__dim_employee.sql`.
 
-`EMPLOYEE` is the only live extract. The other jobs are placeholders.
+Every Kastle source in the catalog is a live extract. Staging, dimension, and fact SQL are in `sql_transformation/`.
 
 ## What a run does
 
-1. `POST /jobs/extract` reads `PULSE_NFC_PROD.EMPLOYEE` for a date window and loads it into `raw.employee`.
+1. `POST /jobs/extract` reads one Oracle object for a date window and loads it unchanged into `raw.<job>`. `company_generic` stores `KEY` as `key_ms`. `coll_month_distribution`, `mis_sale_target`, and `collection_target` are full copies.
 2. `POST /jobs/transform` takes a `layer` of `staging`, `dimension`, or `fact`. The runner splits each file name on `__`, reads the number, and runs that layer's files in that order. `stg_` is staging, `dim_` is dimension, and `fact_` is fact.
-3. `staging` fills `reportingdw.stg_employee`. `dimension` fills `reportingdw.dim_employee`. `fact` has no SQL yet.
+3. `staging` copies each `raw` table into `reportingdw`. `dimension` builds employee, customer, loan, scheme, product, and company generic. `fact` builds application, sales target, and monthly collection.
 
 Startup creates the `raw`, `reportingdw`, and `etl` schemas. Each step is written to `logs/etl-YYYY-MM-DD.log` and to `etl.run_event`.
 
@@ -16,7 +16,7 @@ Startup creates the `raw`, `reportingdw`, and `etl` schemas. Each step is writte
 
 - Python 3.10 or newer
 - A PostgreSQL database you can create schemas in
-- Oracle network access to Kastle, plus a user that can read `EMPLOYEE`
+- Oracle network access to Kastle, plus a user that can read the `PULSE_NFC_PROD` tables in the catalog
 - The Oracle schema name. The default is `PULSE_NFC_PROD`
 
 ## Setup
@@ -66,17 +66,17 @@ curl http://127.0.0.1:8000/health
 
 `{"status":"ok"}` means the app can query PostgreSQL. A 503 means `POSTGRES_DSN` is wrong or the database is down.
 
-## Run the employee load
+## Run a window
 
-Extract first. Replace the dates with the window you want. `MAKEDATE` is inclusive of both dates.
+One call loads every Oracle source, then staging, dimension, and fact. Replace the dates with the window you want. `MAKEDATE` is inclusive of both dates.
 
 ```text
-curl -X POST http://127.0.0.1:8000/jobs/extract ^
+curl -X POST http://127.0.0.1:8000/jobs/load ^
   -H "Content-Type: application/json" ^
-  -d "{\"job\":\"employee\",\"start_dt\":\"2026-06-01\",\"end_dt\":\"2026-06-30\"}"
+  -d "{\"start_dt\":\"2026-06-01\",\"end_dt\":\"2026-06-30\"}"
 ```
 
-The response is `202` with a `run_id`. Only one extract or transform can run at a time. A second call returns `409`.
+The response is `202` with a `run_id`. Only one load can run at a time. A second call returns `409`. A failed extract or SQL statement stops the load.
 
 Poll until `status` is `success` or `failed`:
 
@@ -90,21 +90,7 @@ The `events` list is the detailed step log: Oracle connect, columns, truncate, e
 curl "http://127.0.0.1:8000/logs/daily?date=2026-11-05"
 ```
 
-After the extract succeeds, run staging, then dimension, for the same window. Each call is its own run.
-
-```text
-curl -X POST http://127.0.0.1:8000/jobs/transform ^
-  -H "Content-Type: application/json" ^
-  -d "{\"layer\":\"staging\",\"start_dt\":\"2026-06-01\",\"end_dt\":\"2026-06-30\"}"
-```
-
-```text
-curl -X POST http://127.0.0.1:8000/jobs/transform ^
-  -H "Content-Type: application/json" ^
-  -d "{\"layer\":\"dimension\",\"start_dt\":\"2026-06-01\",\"end_dt\":\"2026-06-30\"}"
-```
-
-`layer` must be `staging`, `dimension`, or `fact`. The run's `job` column stores that layer. Poll each `run_id` the same way. A failed statement stops that layer. The event message includes the statement preview and the database error.
+`/jobs/extract` and `/jobs/transform` remain for one source or one layer. The full window is `/jobs/load`.
 
 Confirm the tables:
 
@@ -122,7 +108,7 @@ SELECT COUNT(*) FROM reportingdw.dim_employee;
 curl http://127.0.0.1:8000/jobs
 ```
 
-`employee`, `V1__stg_raw_employee`, and `V2__dim_employee` are enabled. Every other job is reserved until its SQL file is added. The runner reads the files in `sql_transformation/` and runs only the layer you pass.
+`POST /jobs/load` runs every enabled extract, then staging, dimension, and fact, for one window. Scheme is built before product.
 
 ## Tests
 

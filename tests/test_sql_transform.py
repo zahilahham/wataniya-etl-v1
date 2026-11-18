@@ -133,11 +133,51 @@ class LayerCatalogTests(unittest.TestCase):
         )
         self.assertTrue(all("__stg_" not in name and "__raw_" not in name for name in fact))
 
-    def test_employee_files_are_v1_staging_and_v2_dimension(self) -> None:
-        from app.jobs.catalog import JOBS
+    def test_every_enabled_transform_has_a_sql_file(self) -> None:
+        from app.jobs.catalog import EXTRACT_SPECS, JOBS
+        from app.etl.extract_load import build_extract_query
+        from datetime import date
 
-        live = [(job.layer, job.name) for job in JOBS if job.kind == "transform" and job.enabled]
-        self.assertEqual(live, [("staging", "V1__stg_raw_employee"), ("dimension", "V2__dim_employee")])
+        sql_dir = ROOT / "sql_transformation"
+        for job in JOBS:
+            self.assertTrue(job.enabled)
+            if job.kind != "transform":
+                self.assertIn(job.name, EXTRACT_SPECS)
+                continue
+            self.assertTrue((sql_dir / f"{job.name}.sql").is_file(), job.name)
+
+        start = date(2026, 6, 1)
+        end = date(2026, 6, 2)
+        generic_sql, generic_binds = build_extract_query(
+            "PULSE_NFC_PROD", EXTRACT_SPECS["company_generic"], start, end
+        )
+        self.assertIn("KEY AS KEY_MS", generic_sql)
+        self.assertIn("ROWNUM <= 100000", generic_sql)
+        self.assertEqual(generic_binds, {})
+        sales_sql, sales_binds = build_extract_query(
+            "PULSE_NFC_PROD", EXTRACT_SPECS["nfc_sales_with_status"], start, end
+        )
+        self.assertIn("COALESCE(APPLICATION_DATE", sales_sql)
+        self.assertEqual(set(sales_binds), {"start_dt", "end_dt_exclusive"})
+        full_sql, full_binds = build_extract_query(
+            "PULSE_NFC_PROD", EXTRACT_SPECS["mis_sale_target"], start, end
+        )
+        self.assertNotIn("WHERE", full_sql)
+        self.assertEqual(full_binds, {})
+        from app.jobs.catalog import load_sequence
+
+        steps = load_sequence()
+        self.assertEqual(steps[0], ("extract", "employee"))
+        self.assertEqual(steps[-3:], (("transform", "staging"), ("transform", "dimension"), ("transform", "fact")))
+        self.assertEqual(len([kind for kind, _ in steps if kind == "extract"]), 25)
+        self.assertEqual(
+            [path.name for path in list_transformation_files(sql_dir, "fact")],
+            [
+                "V1__fact_app_cust_product.sql",
+                "V2__fact_emp_target.sql",
+                "V3__fact_loan_collection_monthly.sql",
+            ],
+        )
 
 
 if __name__ == "__main__":
