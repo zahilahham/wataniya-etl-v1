@@ -66,6 +66,14 @@ curl http://127.0.0.1:8000/health
 
 `{"status":"ok"}` means the app can query PostgreSQL. A 503 means `POSTGRES_DSN` is wrong or the database is down.
 
+Open the simple window in a second terminal:
+
+```text
+.venv\Scripts\python.exe -m streamlit run ui.py
+```
+
+It opens at [http://127.0.0.1:8501](http://127.0.0.1:8501). Pick the dates, press **Run full pipeline**, and the page follows that run until it finishes.
+
 ## Run a window
 
 One call loads every Oracle source, then staging, dimension, and fact. Replace the dates with the window you want. `MAKEDATE` is inclusive of both dates.
